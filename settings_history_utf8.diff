@@ -1,0 +1,975 @@
+﻿commit 9dfc88f5d2c24e9eaa88713223972f03f562cbbf
+Author: AI <ai@example.com>
+Date:   Sat Jun 27 03:12:11 2026 +0800
+
+    feat(v4.1): add slope parameters to UI and implement dual-layer stop loss with risk alerts
+
+diff --git a/views/Settings.tsx b/views/Settings.tsx
+index c9eecd6..eee65ff 100644
+--- a/views/Settings.tsx
++++ b/views/Settings.tsx
+@@ -264,23 +264,23 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+                           
+                           {/* ETF Buy */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.etfBuyBias} onChange={e => setTechParams({...techParams, etfBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.etfBuyRsi} onChange={e => setTechParams({...techParams, etfBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.etfBuySlopeDays} onChange={e => setTechParams({...techParams, etfBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.etfBuyBias} onChange={e => setTechParams({...techParams, etfBuyBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.etfBuyRsi} onChange={e => setTechParams({...techParams, etfBuyRsi: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.etfBuySlopeDays} onChange={e => setTechParams({...techParams, etfBuySlopeDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+                           
+                           {/* Large Cap Buy */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.largeCapBuyBias} onChange={e => setTechParams({...techParams, largeCapBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.largeCapBuyRsi} onChange={e => setTechParams({...techParams, largeCapBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.largeCapBuySlopeDays} onChange={e => setTechParams({...techParams, largeCapBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.largeCapBuyBias} onChange={e => setTechParams({...techParams, largeCapBuyBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.largeCapBuyRsi} onChange={e => setTechParams({...techParams, largeCapBuyRsi: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.largeCapBuySlopeDays} onChange={e => setTechParams({...techParams, largeCapBuySlopeDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+ 
+                           {/* Small Cap Buy */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.smallCapBuyBias} onChange={e => setTechParams({...techParams, smallCapBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.smallCapBuyRsi} onChange={e => setTechParams({...techParams, smallCapBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.smallCapBuySlopeDays} onChange={e => setTechParams({...techParams, smallCapBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.smallCapBuyBias} onChange={e => setTechParams({...techParams, smallCapBuyBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.smallCapBuyRsi} onChange={e => setTechParams({...techParams, smallCapBuyRsi: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.smallCapBuySlopeDays} onChange={e => setTechParams({...techParams, smallCapBuySlopeDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+                       </div>
+ 
+@@ -293,23 +293,23 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+                           
+                           {/* ETF Strong Buy */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-emerald-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.etfStrongBuyBias} onChange={e => setTechParams({...techParams, etfStrongBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.etfStrongBuyRsi} onChange={e => setTechParams({...techParams, etfStrongBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.etfStrongBuySlopeDays} onChange={e => setTechParams({...techParams, etfStrongBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.etfStrongBuyBias} onChange={e => setTechParams({...techParams, etfStrongBuyBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.etfStrongBuyRsi} onChange={e => setTechParams({...techParams, etfStrongBuyRsi: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.etfStrongBuySlopeDays} onChange={e => setTechParams({...techParams, etfStrongBuySlopeDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+                           
+                           {/* Large Cap Strong Buy */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-emerald-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.largeCapStrongBuyBias} onChange={e => setTechParams({...techParams, largeCapStrongBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.largeCapStrongBuyRsi} onChange={e => setTechParams({...techParams, largeCapStrongBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.largeCapStrongBuySlopeDays} onChange={e => setTechParams({...techParams, largeCapStrongBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.largeCapStrongBuyBias} onChange={e => setTechParams({...techParams, largeCapStrongBuyBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.largeCapStrongBuyRsi} onChange={e => setTechParams({...techParams, largeCapStrongBuyRsi: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.largeCapStrongBuySlopeDays} onChange={e => setTechParams({...techParams, largeCapStrongBuySlopeDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+ 
+                           {/* Small Cap Strong Buy */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-emerald-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.smallCapStrongBuyBias} onChange={e => setTechParams({...techParams, smallCapStrongBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.smallCapStrongBuyRsi} onChange={e => setTechParams({...techParams, smallCapStrongBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.smallCapStrongBuySlopeDays} onChange={e => setTechParams({...techParams, smallCapStrongBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.smallCapStrongBuyBias} onChange={e => setTechParams({...techParams, smallCapStrongBuyBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.smallCapStrongBuyRsi} onChange={e => setTechParams({...techParams, smallCapStrongBuyRsi: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.smallCapStrongBuySlopeDays} onChange={e => setTechParams({...techParams, smallCapStrongBuySlopeDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+                       </div>
+ 
+@@ -322,18 +322,18 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+                           
+                           {/* ETF Additional Buy */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-cyan-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?Ⅳ銋 (&lt;= %)</label><Input type="number" value={techParams.etfAdditionalBuyBias} onChange={e => setTechParams({...techParams, etfAdditionalBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">撘瑕?蝣潔???(&lt;= %)</label><Input type="number" value={techParams.etfStrongAdditionalBuyBias} onChange={e => setTechParams({...techParams, etfStrongAdditionalBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?Ⅳ銋 (&lt;= %)</label><Input type="number" value={techParams.etfAdditionalBuyBias} onChange={e => setTechParams({...techParams, etfAdditionalBuyBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">撘瑕?蝣潔???(&lt;= %)</label><Input type="number" value={techParams.etfStrongAdditionalBuyBias} onChange={e => setTechParams({...techParams, etfStrongAdditionalBuyBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+                           
+                           {/* Large Cap Trend Add */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg flex flex-col justify-center border border-blue-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?瑕??(鈭斗???</label><Input type="number" value={techParams.largeCapTrendAddCoolDownDays} onChange={e => setTechParams({...techParams, largeCapTrendAddCoolDownDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?瑕??(鈭斗???</label><Input type="number" value={techParams.largeCapTrendAddCoolDownDays} onChange={e => setTechParams({...techParams, largeCapTrendAddCoolDownDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+ 
+                           {/* Small Cap Trend Add */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg flex flex-col justify-center border border-blue-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?瑕??(鈭斗???</label><Input type="number" value={techParams.smallCapTrendAddCoolDownDays} onChange={e => setTechParams({...techParams, smallCapTrendAddCoolDownDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?瑕??(鈭斗???</label><Input type="number" value={techParams.smallCapTrendAddCoolDownDays} onChange={e => setTechParams({...techParams, smallCapTrendAddCoolDownDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+                       </div>
+ 
+@@ -346,20 +346,23 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+                           
+                           {/* ETF Partial Sell */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-amber-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">皜Ⅳ銋 (&gt;= %)</label><Input type="number" value={techParams.etfPartialSellBias} onChange={e => setTechParams({...techParams, etfPartialSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?活皜Ⅳ (&gt;= %)</label><Input type="number" value={techParams.etfSecondPartialSellBias} onChange={e => setTechParams({...techParams, etfSecondPartialSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">皜Ⅳ銋 (&gt;= %)</label><Input type="number" value={techParams.etfPartialSellBias} onChange={e => setTechParams({...techParams, etfPartialSellBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?活皜Ⅳ (&gt;= %)</label><Input type="number" value={techParams.etfSecondPartialSellBias} onChange={e => setTechParams({...techParams, etfSecondPartialSellBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.etfPartialSellSlopeDays} onChange={e => setTechParams({...techParams, etfPartialSellSlopeDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+                           
+                           {/* Large Cap Partial Sell */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-amber-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?銋 (&gt;= %)</label><Input type="number" value={techParams.largeCapPartialSellBias} onChange={e => setTechParams({...techParams, largeCapPartialSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400 text-red-400/80">撘瑕? (&gt;= %)</label><Input type="number" value={techParams.largeCapForceSellBias} onChange={e => setTechParams({...techParams, largeCapForceSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50 text-red-400" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?銋 (&gt;= %)</label><Input type="number" value={techParams.largeCapPartialSellBias} onChange={e => setTechParams({...techParams, largeCapPartialSellBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400 text-red-400/80">撘瑕? (&gt;= %)</label><Input type="number" value={techParams.largeCapForceSellBias} onChange={e => setTechParams({...techParams, largeCapForceSellBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50 text-red-400" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.largeCapPartialSellSlopeDays} onChange={e => setTechParams({...techParams, largeCapPartialSellSlopeDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+ 
+                           {/* Small Cap Partial Sell */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-amber-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?銋 (&gt;= %)</label><Input type="number" value={techParams.smallCapPartialSellBias} onChange={e => setTechParams({...techParams, smallCapPartialSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400 text-red-400/80">撘瑕? (&gt;= %)</label><Input type="number" value={techParams.smallCapForceSellBias} onChange={e => setTechParams({...techParams, smallCapForceSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50 text-red-400" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?銋 (&gt;= %)</label><Input type="number" value={techParams.smallCapPartialSellBias} onChange={e => setTechParams({...techParams, smallCapPartialSellBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400 text-red-400/80">撘瑕? (&gt;= %)</label><Input type="number" value={techParams.smallCapForceSellBias} onChange={e => setTechParams({...techParams, smallCapForceSellBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50 text-red-400" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.smallCapPartialSellSlopeDays} onChange={e => setTechParams({...techParams, smallCapPartialSellSlopeDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                           </div>
+                       </div>
+ 
+@@ -377,12 +380,16 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+                           
+                           {/* Large Cap Stop Loss */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg flex flex-col justify-center border border-rose-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-rose-400">??銋 (&lt;= %)</label><Input type="number" value={techParams.largeCapStopLossBias} onChange={e => setTechParams({...techParams, largeCapStopLossBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50 text-rose-400" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-rose-400">????(&lt;= %)</label><Input type="number" value={techParams.largeCapStopLossPnL} onChange={e => setTechParams({...techParams, largeCapStopLossPnL: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50 text-rose-400" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-rose-400">??銋 (&lt;= %)</label><Input type="number" value={techParams.largeCapStopLossBias} onChange={e => setTechParams({...techParams, largeCapStopLossBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50 text-rose-400" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-amber-400">憸券銋 (&lt;= %)</label><Input type="number" value={techParams.largeCapRiskAlertBias} onChange={e => setTechParams({...techParams, largeCapRiskAlertBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50 text-amber-400" /></div>
+                           </div>
+ 
+                           {/* Small Cap Stop Loss */}
+                           <div className="space-y-2 bg-black/20 p-3 rounded-lg flex flex-col justify-center border border-rose-500/10">
+-                              <div className="flex justify-between items-center"><label className="text-[11px] text-rose-400">??銋 (&lt;= %)</label><Input type="number" value={techParams.smallCapStopLossBias} onChange={e => setTechParams({...techParams, smallCapStopLossBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50 text-rose-400" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-rose-400">????(&lt;= %)</label><Input type="number" value={techParams.smallCapStopLossPnL} onChange={e => setTechParams({...techParams, smallCapStopLossPnL: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50 text-rose-400" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-rose-400">??銋 (&lt;= %)</label><Input type="number" value={techParams.smallCapStopLossBias} onChange={e => setTechParams({...techParams, smallCapStopLossBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50 text-rose-400" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-amber-400">憸券銋 (&lt;= %)</label><Input type="number" value={techParams.smallCapRiskAlertBias} onChange={e => setTechParams({...techParams, smallCapRiskAlertBias: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50 text-amber-400" /></div>
+                           </div>
+                       </div>
+                   </div>
+
+commit a9ddf550d245af701d6fc1ef16d0eadff9b27100
+Author: AI <ai@example.com>
+Date:   Sat Jun 27 02:03:48 2026 +0800
+
+    feat: upgrade to V7.4.0, update Tech Monitoring, Auto-Scan and UI Improvements
+
+diff --git a/views/Settings.tsx b/views/Settings.tsx
+index a723276..c9eecd6 100644
+--- a/views/Settings.tsx
++++ b/views/Settings.tsx
+@@ -61,7 +61,9 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+ 
+   const handleSaveTechParams = () => {
+       saveTechParameters(techParams);
+-      showNotify('success', '?銵?撌脣摮?撠銝活??????);
++      localStorage.setItem('needs_rescan_inventory', 'true');
++      localStorage.setItem('needs_rescan_watchlist', 'true');
++      showNotify('success', '?銵?撌脣摮???????芸??????);
+   };
+ 
+   const handleResetTechParams = () => {
+@@ -243,117 +245,146 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+           <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 space-y-6">
+               <p className="text-xs text-slate-400">?芸?蝢?V3.0 ??閰?撘??眺鞈??瑼鳴??隤踵敺?蝡敶梢擐???⊥?????/p>
+               
+-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+-                  {/* ETF */}
+-                  <div className="space-y-3">
+-                      <h4 className="text-sm font-bold text-emerald-400 border-b border-slate-700 pb-2">? ETF</h4>
+-                      <div className="space-y-2">
+-                          <label className="text-xs text-slate-400">鞎琿脖??Ｙ? (&lt;= %)</label>
+-                          <Input type="number" value={techParams.etfBuyBias} onChange={e => setTechParams({...techParams, etfBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++              <div className="overflow-x-auto pb-2">
++                  <div className="min-w-[700px]">
++                      {/* Header */}
++                      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-4 mb-3 px-4">
++                          <div className="font-bold text-slate-500 text-sm flex items-center">閮???</div>
++                          <div className="font-bold text-emerald-400 text-center bg-slate-900/50 py-2 rounded-lg border border-emerald-500/20">? ETF</div>
++                          <div className="font-bold text-blue-400 text-center bg-slate-900/50 py-2 rounded-lg border border-blue-500/20">? 憭批???/div>
++                          <div className="font-bold text-purple-400 text-center bg-slate-900/50 py-2 rounded-lg border border-purple-500/20">? 撠???/div>
++                      </div>
++
++                      {/* Row 1: ? 鞎琿?*/}
++                      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-4 p-4 bg-slate-900/30 rounded-xl border border-slate-700/30 mb-3 hover:bg-slate-900/50 transition-colors">
++                          <div className="font-bold text-emerald-400 flex flex-col justify-center">
++                              <span>? 鞎琿?(Buy)</span>
++                              <span className="text-[10px] text-slate-500 font-normal mt-1">擐活甇Ｚ???</span>
++                          </div>
++                          
++                          {/* ETF Buy */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.etfBuyBias} onChange={e => setTechParams({...techParams, etfBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.etfBuyRsi} onChange={e => setTechParams({...techParams, etfBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.etfBuySlopeDays} onChange={e => setTechParams({...techParams, etfBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                          </div>
+                           
+-                          <label className="text-xs text-slate-400">鞎琿?RSI (&lt;)</label>
+-                          <Input type="number" value={techParams.etfBuyRsi} onChange={e => setTechParams({...techParams, etfBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          {/* Large Cap Buy */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.largeCapBuyBias} onChange={e => setTechParams({...techParams, largeCapBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.largeCapBuyRsi} onChange={e => setTechParams({...techParams, largeCapBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.largeCapBuySlopeDays} onChange={e => setTechParams({...techParams, largeCapBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                          </div>
+ 
+-                          <label className="text-xs text-slate-400">皜Ⅳ銋??(&gt;= %)</label>
+-                          <Input type="number" value={techParams.etfPartialSellBias} onChange={e => setTechParams({...techParams, etfPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                      </div>
+-                      <details className="mt-4 bg-slate-900/50 rounded-lg border border-slate-700/50 p-2">
+-                          <summary className="text-[11px] font-bold text-slate-400 cursor-pointer select-none hover:text-slate-300">
+-                              ???脤?閮剖? (撘瑁眺/?Ⅳ/??)
+-                          </summary>
+-                          <div className="space-y-2 mt-3 pt-3 border-t border-slate-700/50">
+-                              <label className="text-xs text-slate-500">撘瑁眺銋??(&lt;= %)</label>
+-                              <Input type="number" value={techParams.etfStrongBuyBias} onChange={e => setTechParams({...techParams, etfStrongBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">撘瑁眺 RSI (&lt;)</label>
+-                              <Input type="number" value={techParams.etfStrongBuyRsi} onChange={e => setTechParams({...techParams, etfStrongBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">?Ⅳ銋??(&lt;= %)</label>
+-                              <Input type="number" value={techParams.etfAdditionalBuyBias} onChange={e => setTechParams({...techParams, etfAdditionalBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">撘瑕??Ⅳ銋 (&lt;= %)</label>
+-                              <Input type="number" value={techParams.etfStrongAdditionalBuyBias} onChange={e => setTechParams({...techParams, etfStrongAdditionalBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">?活皜Ⅳ銋 (&gt;= %)</label>
+-                              <Input type="number" value={techParams.etfSecondPartialSellBias} onChange={e => setTechParams({...techParams, etfSecondPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">鞎琿脫??予??(???憭拇)</label>
+-                              <Input type="number" value={techParams.etfBuySlopeDays} onChange={e => setTechParams({...techParams, etfBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">撘瑁眺??憭拇 (???憭拇)</label>
+-                              <Input type="number" value={techParams.etfStrongBuySlopeDays} onChange={e => setTechParams({...techParams, etfStrongBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          {/* Small Cap Buy */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.smallCapBuyBias} onChange={e => setTechParams({...techParams, smallCapBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.smallCapBuyRsi} onChange={e => setTechParams({...techParams, smallCapBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.smallCapBuySlopeDays} onChange={e => setTechParams({...techParams, smallCapBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+                           </div>
+-                      </details>
+-                  </div>
++                      </div>
+ 
+-                  {/* Large Cap */}
+-                  <div className="space-y-3">
+-                      <h4 className="text-sm font-bold text-blue-400 border-b border-slate-700 pb-2">? 憭批???/h4>
+-                      <div className="space-y-2">
+-                          <label className="text-xs text-slate-400">鞎琿脖??Ｙ? (&lt;= %)</label>
+-                          <Input type="number" value={techParams.largeCapBuyBias} onChange={e => setTechParams({...techParams, largeCapBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                      {/* Row 2: ?? 撘瑁眺 */}
++                      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-4 p-4 bg-slate-900/30 rounded-xl border border-slate-700/30 mb-3 hover:bg-slate-900/50 transition-colors">
++                          <div className="font-bold text-emerald-400 flex flex-col justify-center">
++                              <span>?? 撘瑁眺 (Strong)</span>
++                              <span className="text-[10px] text-slate-500 font-normal mt-1">瘛梯?銝Ⅱ隤?頧?/span>
++                          </div>
++                          
++                          {/* ETF Strong Buy */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-emerald-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.etfStrongBuyBias} onChange={e => setTechParams({...techParams, etfStrongBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.etfStrongBuyRsi} onChange={e => setTechParams({...techParams, etfStrongBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.etfStrongBuySlopeDays} onChange={e => setTechParams({...techParams, etfStrongBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                          </div>
+                           
+-                          <label className="text-xs text-slate-400">鞎琿?RSI (&lt;)</label>
+-                          <Input type="number" value={techParams.largeCapBuyRsi} onChange={e => setTechParams({...techParams, largeCapBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          {/* Large Cap Strong Buy */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-emerald-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.largeCapStrongBuyBias} onChange={e => setTechParams({...techParams, largeCapStrongBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.largeCapStrongBuyRsi} onChange={e => setTechParams({...techParams, largeCapStrongBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.largeCapStrongBuySlopeDays} onChange={e => setTechParams({...techParams, largeCapStrongBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                          </div>
+ 
+-                          <label className="text-xs text-slate-400">?銋??(&gt;= %)</label>
+-                          <Input type="number" value={techParams.largeCapPartialSellBias} onChange={e => setTechParams({...techParams, largeCapPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          {/* Small Cap Strong Buy */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-emerald-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">銋??(&lt;= %)</label><Input type="number" value={techParams.smallCapStrongBuyBias} onChange={e => setTechParams({...techParams, smallCapStrongBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">RSI (&lt;)</label><Input type="number" value={techParams.smallCapStrongBuyRsi} onChange={e => setTechParams({...techParams, smallCapStrongBuyRsi: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">??(???憭?</label><Input type="number" value={techParams.smallCapStrongBuySlopeDays} onChange={e => setTechParams({...techParams, smallCapStrongBuySlopeDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                          </div>
++                      </div>
+ 
+-                          <label className="text-xs text-slate-400">撘瑕?銋 (&gt;= %)</label>
+-                          <Input type="number" value={techParams.largeCapForceSellBias} onChange={e => setTechParams({...techParams, largeCapForceSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                      {/* Row 3: ? ?Ⅳ / ? ??Ⅳ */}
++                      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-4 p-4 bg-slate-900/30 rounded-xl border border-slate-700/30 mb-3 hover:bg-slate-900/50 transition-colors">
++                          <div className="font-bold flex flex-col justify-center">
++                              <span className="text-cyan-400">? 撌血?Ⅳ</span>
++                              <span className="text-blue-400 mt-1">? ??Ⅳ</span>
++                          </div>
++                          
++                          {/* ETF Additional Buy */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-cyan-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?Ⅳ銋 (&lt;= %)</label><Input type="number" value={techParams.etfAdditionalBuyBias} onChange={e => setTechParams({...techParams, etfAdditionalBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">撘瑕?蝣潔???(&lt;= %)</label><Input type="number" value={techParams.etfStrongAdditionalBuyBias} onChange={e => setTechParams({...techParams, etfStrongAdditionalBuyBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                          </div>
++                          
++                          {/* Large Cap Trend Add */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg flex flex-col justify-center border border-blue-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?瑕??(鈭斗???</label><Input type="number" value={techParams.largeCapTrendAddCoolDownDays} onChange={e => setTechParams({...techParams, largeCapTrendAddCoolDownDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                          </div>
+ 
+-                          <label className="text-xs text-slate-400">??銋??(&lt;= %)</label>
+-                          <Input type="number" value={techParams.largeCapStopLossBias} onChange={e => setTechParams({...techParams, largeCapStopLossBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                      </div>
+-                      <details className="mt-4 bg-slate-900/50 rounded-lg border border-slate-700/50 p-2">
+-                          <summary className="text-[11px] font-bold text-slate-400 cursor-pointer select-none hover:text-slate-300">
+-                              ???脤?閮剖? (撘瑁眺/?瑕/??)
+-                          </summary>
+-                          <div className="space-y-2 mt-3 pt-3 border-t border-slate-700/50">
+-                              <label className="text-xs text-slate-500">撘瑁眺銋??(&lt;= %)</label>
+-                              <Input type="number" value={techParams.largeCapStrongBuyBias} onChange={e => setTechParams({...techParams, largeCapStrongBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">撘瑁眺 RSI (&lt;)</label>
+-                              <Input type="number" value={techParams.largeCapStrongBuyRsi} onChange={e => setTechParams({...techParams, largeCapStrongBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">鞎琿脫??予??(???憭拇)</label>
+-                              <Input type="number" value={techParams.largeCapBuySlopeDays} onChange={e => setTechParams({...techParams, largeCapBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">撘瑁眺??憭拇 (???憭拇)</label>
+-                              <Input type="number" value={techParams.largeCapStrongBuySlopeDays} onChange={e => setTechParams({...techParams, largeCapStrongBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">??Ⅳ?瑕??(鈭斗???</label>
+-                              <Input type="number" value={techParams.largeCapTrendAddCoolDownDays} onChange={e => setTechParams({...techParams, largeCapTrendAddCoolDownDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          {/* Small Cap Trend Add */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg flex flex-col justify-center border border-blue-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?瑕??(鈭斗???</label><Input type="number" value={techParams.smallCapTrendAddCoolDownDays} onChange={e => setTechParams({...techParams, smallCapTrendAddCoolDownDays: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
+                           </div>
+-                      </details>
+-                  </div>
++                      </div>
+ 
+-                  {/* Small Cap */}
+-                  <div className="space-y-3">
+-                      <h4 className="text-sm font-bold text-purple-400 border-b border-slate-700 pb-2">? 撠???/h4>
+-                      <div className="space-y-2">
+-                          <label className="text-xs text-slate-400">鞎琿脖??Ｙ? (&lt;= %)</label>
+-                          <Input type="number" value={techParams.smallCapBuyBias} onChange={e => setTechParams({...techParams, smallCapBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                      {/* Row 4: ? ? / 皜Ⅳ */}
++                      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-4 p-4 bg-slate-900/30 rounded-xl border border-slate-700/30 mb-3 hover:bg-slate-900/50 transition-colors">
++                          <div className="font-bold text-amber-400 flex flex-col justify-center">
++                              <span>? ?/皜Ⅳ</span>
++                              <span className="text-[10px] text-slate-500 font-normal mt-1">?剔??脣?亥?</span>
++                          </div>
++                          
++                          {/* ETF Partial Sell */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-amber-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">皜Ⅳ銋 (&gt;= %)</label><Input type="number" value={techParams.etfPartialSellBias} onChange={e => setTechParams({...techParams, etfPartialSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?活皜Ⅳ (&gt;= %)</label><Input type="number" value={techParams.etfSecondPartialSellBias} onChange={e => setTechParams({...techParams, etfSecondPartialSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                          </div>
+                           
+-                          <label className="text-xs text-slate-400">鞎琿?RSI (&lt;)</label>
+-                          <Input type="number" value={techParams.smallCapBuyRsi} onChange={e => setTechParams({...techParams, smallCapBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          {/* Large Cap Partial Sell */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-amber-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?銋 (&gt;= %)</label><Input type="number" value={techParams.largeCapPartialSellBias} onChange={e => setTechParams({...techParams, largeCapPartialSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400 text-red-400/80">撘瑕? (&gt;= %)</label><Input type="number" value={techParams.largeCapForceSellBias} onChange={e => setTechParams({...techParams, largeCapForceSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50 text-red-400" /></div>
++                          </div>
+ 
+-                          <label className="text-xs text-slate-400">?銋??(&gt;= %)</label>
+-                          <Input type="number" value={techParams.smallCapPartialSellBias} onChange={e => setTechParams({...techParams, smallCapPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          {/* Small Cap Partial Sell */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-amber-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">?銋 (&gt;= %)</label><Input type="number" value={techParams.smallCapPartialSellBias} onChange={e => setTechParams({...techParams, smallCapPartialSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50" /></div>
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400 text-red-400/80">撘瑕? (&gt;= %)</label><Input type="number" value={techParams.smallCapForceSellBias} onChange={e => setTechParams({...techParams, smallCapForceSellBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50 text-red-400" /></div>
++                          </div>
++                      </div>
+ 
+-                          <label className="text-xs text-slate-400">撘瑕?銋 (&gt;= %)</label>
+-                          <Input type="number" value={techParams.smallCapForceSellBias} onChange={e => setTechParams({...techParams, smallCapForceSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                      {/* Row 5: ?? ?? */}
++                      <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-4 p-4 bg-slate-900/30 rounded-xl border border-rose-900/30 hover:bg-slate-900/50 transition-colors">
++                          <div className="font-bold text-rose-400 flex flex-col justify-center">
++                              <span>?? ?? (Stop Loss)</span>
++                              <span className="text-[10px] text-slate-500 font-normal mt-1">撘瑕?批憸券</span>
++                          </div>
++                          
++                          {/* ETF Stop Loss */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg flex items-center justify-center text-slate-600 text-xs border border-slate-700/50">
++                              ETF 銝???+                          </div>
++                          
++                          {/* Large Cap Stop Loss */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg flex flex-col justify-center border border-rose-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-rose-400">??銋 (&lt;= %)</label><Input type="number" value={techParams.largeCapStopLossBias} onChange={e => setTechParams({...techParams, largeCapStopLossBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50 text-rose-400" /></div>
++                          </div>
+ 
+-                          <label className="text-xs text-slate-400">??銋??(&lt;= %)</label>
+-                          <Input type="number" value={techParams.smallCapStopLossBias} onChange={e => setTechParams({...techParams, smallCapStopLossBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                      </div>
+-                      <details className="mt-4 bg-slate-900/50 rounded-lg border border-slate-700/50 p-2">
+-                          <summary className="text-[11px] font-bold text-slate-400 cursor-pointer select-none hover:text-slate-300">
+-                              ???脤?閮剖? (撘瑁眺/?瑕/??)
+-                          </summary>
+-                          <div className="space-y-2 mt-3 pt-3 border-t border-slate-700/50">
+-                              <label className="text-xs text-slate-500">撘瑁眺銋??(&lt;= %)</label>
+-                              <Input type="number" value={techParams.smallCapStrongBuyBias} onChange={e => setTechParams({...techParams, smallCapStrongBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">撘瑁眺 RSI (&lt;)</label>
+-                              <Input type="number" value={techParams.smallCapStrongBuyRsi} onChange={e => setTechParams({...techParams, smallCapStrongBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">鞎琿脫??予??(???憭拇)</label>
+-                              <Input type="number" value={techParams.smallCapBuySlopeDays} onChange={e => setTechParams({...techParams, smallCapBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">撘瑁眺??憭拇 (???憭拇)</label>
+-                              <Input type="number" value={techParams.smallCapStrongBuySlopeDays} onChange={e => setTechParams({...techParams, smallCapStrongBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+-                              <label className="text-xs text-slate-500">??Ⅳ?瑕??(鈭斗???</label>
+-                              <Input type="number" value={techParams.smallCapTrendAddCoolDownDays} onChange={e => setTechParams({...techParams, smallCapTrendAddCoolDownDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          {/* Small Cap Stop Loss */}
++                          <div className="space-y-2 bg-black/20 p-3 rounded-lg flex flex-col justify-center border border-rose-500/10">
++                              <div className="flex justify-between items-center"><label className="text-[11px] text-rose-400">??銋 (&lt;= %)</label><Input type="number" value={techParams.smallCapStopLossBias} onChange={e => setTechParams({...techParams, smallCapStopLossBias: Number(e.target.value)})} className="h-7 w-16 text-xs bg-black/50 text-rose-400" /></div>
+                           </div>
+-                      </details>
++                      </div>
+                   </div>
+               </div>
+           </div>
+
+commit b832696ef7c25b9d00d8a129c92fa37291179504
+Author: AI <ai@example.com>
+Date:   Sat Jun 27 00:04:59 2026 +0800
+
+    feat: 撖虫??梯??銵??豢?嗡??Ｚ???憿???隞嗆?隞?
+diff --git a/views/Settings.tsx b/views/Settings.tsx
+index 2898c2c..a723276 100644
+--- a/views/Settings.tsx
++++ b/views/Settings.tsx
+@@ -257,6 +257,27 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+                           <label className="text-xs text-slate-400">皜Ⅳ銋??(&gt;= %)</label>
+                           <Input type="number" value={techParams.etfPartialSellBias} onChange={e => setTechParams({...techParams, etfPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+                       </div>
++                      <details className="mt-4 bg-slate-900/50 rounded-lg border border-slate-700/50 p-2">
++                          <summary className="text-[11px] font-bold text-slate-400 cursor-pointer select-none hover:text-slate-300">
++                              ???脤?閮剖? (撘瑁眺/?Ⅳ/??)
++                          </summary>
++                          <div className="space-y-2 mt-3 pt-3 border-t border-slate-700/50">
++                              <label className="text-xs text-slate-500">撘瑁眺銋??(&lt;= %)</label>
++                              <Input type="number" value={techParams.etfStrongBuyBias} onChange={e => setTechParams({...techParams, etfStrongBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">撘瑁眺 RSI (&lt;)</label>
++                              <Input type="number" value={techParams.etfStrongBuyRsi} onChange={e => setTechParams({...techParams, etfStrongBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">?Ⅳ銋??(&lt;= %)</label>
++                              <Input type="number" value={techParams.etfAdditionalBuyBias} onChange={e => setTechParams({...techParams, etfAdditionalBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">撘瑕??Ⅳ銋 (&lt;= %)</label>
++                              <Input type="number" value={techParams.etfStrongAdditionalBuyBias} onChange={e => setTechParams({...techParams, etfStrongAdditionalBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">?活皜Ⅳ銋 (&gt;= %)</label>
++                              <Input type="number" value={techParams.etfSecondPartialSellBias} onChange={e => setTechParams({...techParams, etfSecondPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">鞎琿脫??予??(???憭拇)</label>
++                              <Input type="number" value={techParams.etfBuySlopeDays} onChange={e => setTechParams({...techParams, etfBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">撘瑁眺??憭拇 (???憭拇)</label>
++                              <Input type="number" value={techParams.etfStrongBuySlopeDays} onChange={e => setTechParams({...techParams, etfStrongBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          </div>
++                      </details>
+                   </div>
+ 
+                   {/* Large Cap */}
+@@ -278,6 +299,23 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+                           <label className="text-xs text-slate-400">??銋??(&lt;= %)</label>
+                           <Input type="number" value={techParams.largeCapStopLossBias} onChange={e => setTechParams({...techParams, largeCapStopLossBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+                       </div>
++                      <details className="mt-4 bg-slate-900/50 rounded-lg border border-slate-700/50 p-2">
++                          <summary className="text-[11px] font-bold text-slate-400 cursor-pointer select-none hover:text-slate-300">
++                              ???脤?閮剖? (撘瑁眺/?瑕/??)
++                          </summary>
++                          <div className="space-y-2 mt-3 pt-3 border-t border-slate-700/50">
++                              <label className="text-xs text-slate-500">撘瑁眺銋??(&lt;= %)</label>
++                              <Input type="number" value={techParams.largeCapStrongBuyBias} onChange={e => setTechParams({...techParams, largeCapStrongBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">撘瑁眺 RSI (&lt;)</label>
++                              <Input type="number" value={techParams.largeCapStrongBuyRsi} onChange={e => setTechParams({...techParams, largeCapStrongBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">鞎琿脫??予??(???憭拇)</label>
++                              <Input type="number" value={techParams.largeCapBuySlopeDays} onChange={e => setTechParams({...techParams, largeCapBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">撘瑁眺??憭拇 (???憭拇)</label>
++                              <Input type="number" value={techParams.largeCapStrongBuySlopeDays} onChange={e => setTechParams({...techParams, largeCapStrongBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">??Ⅳ?瑕??(鈭斗???</label>
++                              <Input type="number" value={techParams.largeCapTrendAddCoolDownDays} onChange={e => setTechParams({...techParams, largeCapTrendAddCoolDownDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          </div>
++                      </details>
+                   </div>
+ 
+                   {/* Small Cap */}
+@@ -299,6 +337,23 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+                           <label className="text-xs text-slate-400">??銋??(&lt;= %)</label>
+                           <Input type="number" value={techParams.smallCapStopLossBias} onChange={e => setTechParams({...techParams, smallCapStopLossBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+                       </div>
++                      <details className="mt-4 bg-slate-900/50 rounded-lg border border-slate-700/50 p-2">
++                          <summary className="text-[11px] font-bold text-slate-400 cursor-pointer select-none hover:text-slate-300">
++                              ???脤?閮剖? (撘瑁眺/?瑕/??)
++                          </summary>
++                          <div className="space-y-2 mt-3 pt-3 border-t border-slate-700/50">
++                              <label className="text-xs text-slate-500">撘瑁眺銋??(&lt;= %)</label>
++                              <Input type="number" value={techParams.smallCapStrongBuyBias} onChange={e => setTechParams({...techParams, smallCapStrongBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">撘瑁眺 RSI (&lt;)</label>
++                              <Input type="number" value={techParams.smallCapStrongBuyRsi} onChange={e => setTechParams({...techParams, smallCapStrongBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">鞎琿脫??予??(???憭拇)</label>
++                              <Input type="number" value={techParams.smallCapBuySlopeDays} onChange={e => setTechParams({...techParams, smallCapBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">撘瑁眺??憭拇 (???憭拇)</label>
++                              <Input type="number" value={techParams.smallCapStrongBuySlopeDays} onChange={e => setTechParams({...techParams, smallCapStrongBuySlopeDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                              <label className="text-xs text-slate-500">??Ⅳ?瑕??(鈭斗???</label>
++                              <Input type="number" value={techParams.smallCapTrendAddCoolDownDays} onChange={e => setTechParams({...techParams, smallCapTrendAddCoolDownDays: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          </div>
++                      </details>
+                   </div>
+               </div>
+           </div>
+
+commit c719c195739d4abd30e78d431ee4aa494213e4d6
+Author: AI <ai@example.com>
+Date:   Fri Jun 26 03:57:30 2026 +0800
+
+    feat: expose Stop Loss and Force Sell parameters in Settings
+
+diff --git a/views/Settings.tsx b/views/Settings.tsx
+index 76a26b2..2898c2c 100644
+--- a/views/Settings.tsx
++++ b/views/Settings.tsx
+@@ -271,6 +271,12 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+ 
+                           <label className="text-xs text-slate-400">?銋??(&gt;= %)</label>
+                           <Input type="number" value={techParams.largeCapPartialSellBias} onChange={e => setTechParams({...techParams, largeCapPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++
++                          <label className="text-xs text-slate-400">撘瑕?銋 (&gt;= %)</label>
++                          <Input type="number" value={techParams.largeCapForceSellBias} onChange={e => setTechParams({...techParams, largeCapForceSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++
++                          <label className="text-xs text-slate-400">??銋??(&lt;= %)</label>
++                          <Input type="number" value={techParams.largeCapStopLossBias} onChange={e => setTechParams({...techParams, largeCapStopLossBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+                       </div>
+                   </div>
+ 
+@@ -286,6 +292,12 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+ 
+                           <label className="text-xs text-slate-400">?銋??(&gt;= %)</label>
+                           <Input type="number" value={techParams.smallCapPartialSellBias} onChange={e => setTechParams({...techParams, smallCapPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++
++                          <label className="text-xs text-slate-400">撘瑕?銋 (&gt;= %)</label>
++                          <Input type="number" value={techParams.smallCapForceSellBias} onChange={e => setTechParams({...techParams, smallCapForceSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++
++                          <label className="text-xs text-slate-400">??銋??(&lt;= %)</label>
++                          <Input type="number" value={techParams.smallCapStopLossBias} onChange={e => setTechParams({...techParams, smallCapStopLossBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
+                       </div>
+                   </div>
+               </div>
+
+commit 62ba34408a60a186a8550b80baea32db045e5424
+Author: AI <ai@example.com>
+Date:   Fri Jun 26 03:21:45 2026 +0800
+
+    feat: extract technical parameters to settings UI and remove techScore buy fallback
+
+diff --git a/views/Settings.tsx b/views/Settings.tsx
+index 74e9d11..76a26b2 100644
+--- a/views/Settings.tsx
++++ b/views/Settings.tsx
+@@ -1,9 +1,9 @@
+ 
+ import React, { useState, useEffect } from 'react';
+ import { Card, Button, Input, Modal } from '../components/ui';
+-import { exportData, importData, clearAllData, getGoogleClientId, saveGoogleClientId, getApiKey, saveApiKey, getFeeDiscount, saveFeeDiscount } from '../services/storage';
++import { exportData, importData, clearAllData, getGoogleClientId, saveGoogleClientId, getApiKey, saveApiKey, getFeeDiscount, saveFeeDiscount, getTechParameters, saveTechParameters, DEFAULT_TECH_PARAMS } from '../services/storage';
+ import { initGapi, initGis, handleAuthClick, uploadToDrive, downloadFromDrive, getBackupMetadata, checkConnection } from '../services/googleDrive';
+-import { Download, Upload, CheckCircle2, AlertCircle, X, Cloud, RefreshCw, LogIn, History, Trash2, Key, Eye, EyeOff, Sparkles, ExternalLink, PieChart, ScrollText, CalendarClock, Percent, TrendingUp } from 'lucide-react';
++import { Download, Upload, CheckCircle2, AlertCircle, X, Cloud, RefreshCw, LogIn, History, Trash2, Key, Eye, EyeOff, Sparkles, ExternalLink, PieChart, ScrollText, CalendarClock, Percent, TrendingUp, Settings as SettingsIcon } from 'lucide-react';
+ import { ApiKeyStatus, Asset, AssetType } from '../types';
+ import { STORAGE_KEYS } from '../constants';
+ 
+@@ -17,6 +17,7 @@ interface SettingsProps {
+ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
+   const [feeDiscount, setFeeDiscount] = useState(0.28);
++  const [techParams, setTechParams] = useState(DEFAULT_TECH_PARAMS);
+ 
+   const [googleClientId, setGoogleClientId] = useState('');
+   const [isDriveConnected, setIsDriveConnected] = useState(false);
+@@ -27,6 +28,7 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+ 
+   useEffect(() => {
+     setFeeDiscount(getFeeDiscount());
++    setTechParams(getTechParameters());
+     const storedClientId = getGoogleClientId();
+     if (storedClientId) {
+         setGoogleClientId(storedClientId);
+@@ -57,6 +59,19 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+       showNotify('success', '??鞎餅???歇?脣?嚗?);
+   };
+ 
++  const handleSaveTechParams = () => {
++      saveTechParameters(techParams);
++      showNotify('success', '?銵?撌脣摮?撠銝活??????);
++  };
++
++  const handleResetTechParams = () => {
++      if(confirm('蝣箏?閬??蝟餌絞?身??銵???')) {
++          setTechParams(DEFAULT_TECH_PARAMS);
++          saveTechParameters(DEFAULT_TECH_PARAMS);
++          showNotify('success', '撌脤???閮剖??詻?);
++      }
++  };
++
+   const handleSaveClientId = () => {
+       saveGoogleClientId(googleClientId.trim());
+       showNotify('success', 'Google Client ID 撌脣摮??岫暺?????);
+@@ -214,6 +229,69 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
+           </div>
+       </Card>
+ 
++      {/* Technical Parameters Settings */}
++      <Card className="border-indigo-500/30 bg-gradient-to-br from-slate-800 to-slate-900/50">
++          <div className="flex justify-between items-start mb-4">
++              <h3 className="text-lg font-bold flex items-center gap-2 text-white">
++                <SettingsIcon className="text-indigo-400"/> ?銵?閮剖?
++              </h3>
++              <div className="flex gap-2">
++                  <Button onClick={handleResetTechParams} variant="danger" className="text-xs h-8 px-3">???身</Button>
++                  <Button onClick={handleSaveTechParams} variant="secondary" className="text-xs h-8 px-3">?脣??</Button>
++              </div>
++          </div>
++          <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 space-y-6">
++              <p className="text-xs text-slate-400">?芸?蝢?V3.0 ??閰?撘??眺鞈??瑼鳴??隤踵敺?蝡敶梢擐???⊥?????/p>
++              
++              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
++                  {/* ETF */}
++                  <div className="space-y-3">
++                      <h4 className="text-sm font-bold text-emerald-400 border-b border-slate-700 pb-2">? ETF</h4>
++                      <div className="space-y-2">
++                          <label className="text-xs text-slate-400">鞎琿脖??Ｙ? (&lt;= %)</label>
++                          <Input type="number" value={techParams.etfBuyBias} onChange={e => setTechParams({...techParams, etfBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          
++                          <label className="text-xs text-slate-400">鞎琿?RSI (&lt;)</label>
++                          <Input type="number" value={techParams.etfBuyRsi} onChange={e => setTechParams({...techParams, etfBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++
++                          <label className="text-xs text-slate-400">皜Ⅳ銋??(&gt;= %)</label>
++                          <Input type="number" value={techParams.etfPartialSellBias} onChange={e => setTechParams({...techParams, etfPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                      </div>
++                  </div>
++
++                  {/* Large Cap */}
++                  <div className="space-y-3">
++                      <h4 className="text-sm font-bold text-blue-400 border-b border-slate-700 pb-2">? 憭批???/h4>
++                      <div className="space-y-2">
++                          <label className="text-xs text-slate-400">鞎琿脖??Ｙ? (&lt;= %)</label>
++                          <Input type="number" value={techParams.largeCapBuyBias} onChange={e => setTechParams({...techParams, largeCapBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          
++                          <label className="text-xs text-slate-400">鞎琿?RSI (&lt;)</label>
++                          <Input type="number" value={techParams.largeCapBuyRsi} onChange={e => setTechParams({...techParams, largeCapBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++
++                          <label className="text-xs text-slate-400">?銋??(&gt;= %)</label>
++                          <Input type="number" value={techParams.largeCapPartialSellBias} onChange={e => setTechParams({...techParams, largeCapPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                      </div>
++                  </div>
++
++                  {/* Small Cap */}
++                  <div className="space-y-3">
++                      <h4 className="text-sm font-bold text-purple-400 border-b border-slate-700 pb-2">? 撠???/h4>
++                      <div className="space-y-2">
++                          <label className="text-xs text-slate-400">鞎琿脖??Ｙ? (&lt;= %)</label>
++                          <Input type="number" value={techParams.smallCapBuyBias} onChange={e => setTechParams({...techParams, smallCapBuyBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                          
++                          <label className="text-xs text-slate-400">鞎琿?RSI (&lt;)</label>
++                          <Input type="number" value={techParams.smallCapBuyRsi} onChange={e => setTechParams({...techParams, smallCapBuyRsi: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++
++                          <label className="text-xs text-slate-400">?銋??(&gt;= %)</label>
++                          <Input type="number" value={techParams.smallCapPartialSellBias} onChange={e => setTechParams({...techParams, smallCapPartialSellBias: Number(e.target.value)})} className="h-8 text-sm bg-black/30" />
++                      </div>
++                  </div>
++              </div>
++          </div>
++      </Card>
++
+ 
+       {/* Google Drive Sync */}
+       <Card>
+
+commit 019ffd0c9e45393d7a07d9b79bd3add2fce199b0
+Author: AI <ai@example.com>
+Date:   Sun Jun 21 21:33:53 2026 +0800
+
+    refactor: Dashboard UI/UX optimization (Bento Box), removed AI references
+
+diff --git a/views/Settings.tsx b/views/Settings.tsx
+new file mode 100644
+index 0000000..74e9d11
+--- /dev/null
++++ b/views/Settings.tsx
+@@ -0,0 +1,297 @@
++
++import React, { useState, useEffect } from 'react';
++import { Card, Button, Input, Modal } from '../components/ui';
++import { exportData, importData, clearAllData, getGoogleClientId, saveGoogleClientId, getApiKey, saveApiKey, getFeeDiscount, saveFeeDiscount } from '../services/storage';
++import { initGapi, initGis, handleAuthClick, uploadToDrive, downloadFromDrive, getBackupMetadata, checkConnection } from '../services/googleDrive';
++import { Download, Upload, CheckCircle2, AlertCircle, X, Cloud, RefreshCw, LogIn, History, Trash2, Key, Eye, EyeOff, Sparkles, ExternalLink, PieChart, ScrollText, CalendarClock, Percent, TrendingUp } from 'lucide-react';
++import { ApiKeyStatus, Asset, AssetType } from '../types';
++import { STORAGE_KEYS } from '../constants';
++
++interface SettingsProps {
++  onDataChange: () => void;
++}
++
++
++
++
++export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
++  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
++  const [feeDiscount, setFeeDiscount] = useState(0.28);
++
++  const [googleClientId, setGoogleClientId] = useState('');
++  const [isDriveConnected, setIsDriveConnected] = useState(false);
++  const [isDriveLoading, setIsDriveLoading] = useState(false);
++
++  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
++  const [previewContent, setPreviewContent] = useState<{ raw: string; stats: Record<string, number>; metadata: any } | null>(null);
++
++  useEffect(() => {
++    setFeeDiscount(getFeeDiscount());
++    const storedClientId = getGoogleClientId();
++    if (storedClientId) {
++        setGoogleClientId(storedClientId);
++        autoInitDrive(storedClientId);
++    }
++  // eslint-disable-next-line react-hooks/exhaustive-deps
++  }, []);
++
++  const autoInitDrive = async (clientId: string) => {
++      try {
++          await initGapi();
++          await initGis(clientId);
++          if (checkConnection()) setIsDriveConnected(true);
++      } catch (e) {
++          console.debug("Drive auto-init skipped", e);
++      }
++  };
++
++  const showNotify = (type: 'success' | 'error', message: string) => {
++      setNotification({ type, message });
++      setTimeout(() => setNotification(null), 5000);
++  };
++
++
++  
++  const handleSaveFeeDiscount = () => {
++      saveFeeDiscount(feeDiscount);
++      showNotify('success', '??鞎餅???歇?脣?嚗?);
++  };
++
++  const handleSaveClientId = () => {
++      saveGoogleClientId(googleClientId.trim());
++      showNotify('success', 'Google Client ID 撌脣摮??岫暺?????);
++      autoInitDrive(googleClientId.trim());
++  };
++
++  const handleConnectDrive = async () => {
++      if (!googleClientId) {
++          showNotify('error', '隢?頛詨 Google Client ID');
++          return;
++      }
++      setIsDriveLoading(true);
++      try {
++          await initGapi();
++          await initGis(googleClientId);
++          await handleAuthClick();
++          setIsDriveConnected(true);
++          showNotify('success', 'Google Drive ????嚗?);
++          const backup = await getBackupMetadata();
++          if (backup) {
++              const date = new Date(backup.modifiedTime).toLocaleString();
++              if (confirm(`?? ?菜葫?圈蝡臬?隞賣?\n\n?遢??嚗?{date}\n\n?臬蝡銝?銝阡??甇方?蝵殷?`)) {
++                  await performRestore();
++              }
++          }
++      } catch (e: any) {
++          showNotify('error', `??憭望?: ${e.message || '???航炊嚗?瑼Ｘ靘?蝬脣?閮剖?'}`);
++      } finally {
++          setIsDriveLoading(false);
++      }
++  };
++
++  const handleBackupToDrive = async () => {
++      if(!isDriveConnected) return;
++      setIsDriveLoading(true);
++      try {
++          await uploadToDrive();
++          showNotify('success', '?遢??嚗??歇??摮?單??Google Drive??);
++      } catch (e) {
++          showNotify('error', '銝憭望?嚗?瑼Ｘ蝬脰楝??甈?);
++      } finally {
++          setIsDriveLoading(false);
++      }
++  };
++
++  const performRestore = async () => {
++      try {
++          const success = await downloadFromDrive();
++          if (success) {
++              onDataChange();
++              showNotify('success', '????嚗????歇?郊?單迨鋆蔭??);
++          } else {
++              showNotify('error', '??憭望?嚗?獢撘?甇?Ⅱ??);
++          }
++      } catch (e: any) {
++           showNotify('error', `銝?憭望?: ${e.message || '?曆??啣?隞賣?'}`);
++      }
++  };
++
++  const handleRestoreFromDrive = async () => {
++      if(!isDriveConnected) return;
++      if(!confirm("蝣箏?閬??脩垢??????閬??暹?鞈???)) return;
++      setIsDriveLoading(true);
++      await performRestore();
++      setIsDriveLoading(false);
++  };
++
++  const handleImportFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
++    const file = e.target.files?.[0];
++    if (file) {
++      const reader = new FileReader();
++      reader.onload = (ev) => {
++        if (ev.target?.result) {
++          const jsonString = ev.target.result as string;
++          try {
++            const data = JSON.parse(jsonString);
++            const assets: Asset[] = data[STORAGE_KEYS.ASSETS] || [];
++            const stockCount = assets.filter(a => a.type === AssetType.STOCK).length;
++
++            const stats = {
++                assets: assets.length || 0,
++                transactions: data[STORAGE_KEYS.TRANSACTIONS]?.length || 0,
++                recurring: data[STORAGE_KEYS.RECURRING]?.length || 0,
++                stocks: stockCount,
++            };
++            setPreviewContent({ raw: jsonString, stats, metadata: data.ft_metadata });
++            setIsPreviewModalOpen(true);
++          } catch (err) {
++            showNotify('error', '瑼??澆??航炊?歇????);
++          }
++        }
++      };
++      reader.readAsText(file);
++    }
++    e.target.value = '';
++  };
++
++  const handleConfirmImport = () => {
++    if (!previewContent) return;
++    const success = importData(previewContent.raw);
++    if (success) {
++      onDataChange();
++      showNotify('success', '?臬??嚗??歇????);
++    } else {
++      showNotify('error', '?臬憭望?嚗?瑼Ｘ瑼???);
++    }
++    setIsPreviewModalOpen(false);
++    setPreviewContent(null);
++  };
++
++  const handleReset = () => {
++    if (confirm("蝣箏?閬?蝵桃頂蝯勗?嚗?????◤?芷??)) {
++        clearAllData();
++        setGoogleClientId('');
++        setIsDriveConnected(false);
++        onDataChange();
++        showNotify('success', '蝟餌絞撌脤?蝵柴?);
++    }
++  };
++
++  return (
++    <div className="max-w-3xl mx-auto space-y-8 animate-fade-in relative pb-20">
++      <div>
++         <h2 className="text-2xl font-bold mb-2 text-white">蝟餌絞閮剖?</h2>
++         <p className="text-slate-400">蝞∠? API ??蝡臬?甇亥?鞈?摰?扼?/p>
++      </div>
++
++      {notification && (
++        <div className={`p-4 rounded-xl border flex items-start gap-3 shadow-lg animate-fade-in sticky top-4 z-50 ${notification.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400' : 'bg-red-500/10 border-red-500/50 text-red-400'}`}>
++            {notification.type === 'success' ? <CheckCircle2 size={24}/> : <AlertCircle size={24}/>}
++            <div className="flex-1 pt-0.5">
++                <p className="text-sm font-bold">{notification.message}</p>
++            </div>
++            <button onClick={() => setNotification(null)}><X size={16}/></button>
++        </div>
++      )}
++
++      {/* Investment Settings */}
++      <Card className="border-cyan-500/30 bg-gradient-to-br from-slate-800 to-slate-900/50">
++          <h3 className="text-lg font-bold flex items-center gap-2 text-white mb-4">
++            <Sparkles className="text-cyan-400"/> ??閮剖?
++          </h3>
++          <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 space-y-6">
++              <div>
++                  <label className="text-sm text-slate-300 mb-2 block">?∠巨??鞎餅???/label>
++                  <div className="flex gap-2">
++                      <div className="relative flex-1">
++                           <Input type="number" step="0.01" value={feeDiscount} onChange={(e) => setFeeDiscount(Number(e.target.value))} placeholder="靘?: 0.28" className="pl-9 font-mono text-sm bg-black/30" />
++                           <Percent size={16} className="absolute left-3 top-3 text-slate-500"/>
++                      </div>
++                      <Button onClick={handleSaveFeeDiscount} variant="secondary" className="shrink-0">?脣?</Button>
++                  </div>
++                  <p className="text-xs text-slate-500 mt-2">隢撓?交??????靘? 2.8 ??頛詨 0.28?迨閮剖?撠蔣?踵???蝞?皞Ⅱ?扼?/p>
++              </div>
++          </div>
++      </Card>
++
++
++      {/* Google Drive Sync */}
++      <Card>
++          <div className="flex justify-between items-start mb-4">
++              <h3 className="text-lg font-bold flex items-center gap-2 text-white">
++                <Cloud className="text-blue-400"/> Google Drive ?脩垢?郊
++              </h3>
++              {isDriveConnected && (
++                  <span className="bg-emerald-500/20 text-emerald-400 text-[10px] px-2 py-1 rounded-full border border-emerald-500/30 flex items-center gap-1">
++                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div> 撌脤??
++                  </span>
++              )}
++          </div>
++          <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700/50 space-y-4">
++              <div className="text-sm text-slate-400">
++                  <p className="mb-4">撠??董????隞質?函?蝘犖?脩垢 (Google Drive)嚗圾瘙箄楊鋆蔭?郊?瘙?/p>
++                  
++                  <div className="space-y-2">
++                      <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider">OAuth Client ID</label>
++                      <div className="flex gap-2">
++                          <Input type="text" value={googleClientId} onChange={(e) => setGoogleClientId(e.target.value)} placeholder="頛詨 Google Cloud Client ID" className="font-mono text-xs bg-black/30" />
++                          <Button onClick={handleSaveClientId} variant="secondary" className="shrink-0 h-10 px-3">?脣?</Button>
++                      </div>
++                      <p className="text-[10px] text-slate-600">* 隢 Google Cloud Console 閮剖???靘? (Javascript Origins)??/p>
++                  </div>
++              </div>
++
++              <div className="flex flex-col md:flex-row gap-3 pt-2">
++                  <Button onClick={handleConnectDrive} disabled={isDriveLoading || (isDriveConnected && checkConnection())} className={`flex-1 ${isDriveConnected ? 'bg-emerald-600/50 cursor-default' : 'bg-blue-600'}`}>
++                      {isDriveLoading ? <RefreshCw className="animate-spin" size={18}/> : isDriveConnected ? <CheckCircle2 size={18}/> : <LogIn size={18}/>}
++                      {isDriveConnected ? '?脩垢??撌脣停蝺? : '?? Google 撣唾?'}
++                  </Button>
++                  {isDriveConnected && (<><Button onClick={handleBackupToDrive} disabled={isDriveLoading} variant="secondary" className="flex-1"><Upload size={18} className="mr-2"/> ?脩垢?遢</Button><Button onClick={handleRestoreFromDrive} disabled={isDriveLoading} variant="secondary" className="flex-1"><Cloud size={18} className="mr-2"/> ?脩垢??</Button></>)}
++              </div>
++          </div>
++      </Card>
++
++      <Card>
++        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 text-white"><History className="text-amber-500"/> ?砍鞈?蝞∠?</h3>
++        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
++            <Button onClick={exportData} variant="secondary" className="w-full text-xs"><Download size={16} className="mr-2"/> ?臬 JSON ?遢</Button>
++            <div className="relative">
++                <input type="file" onChange={handleImportFileSelect} accept=".json" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
++                <Button variant="secondary" className="w-full text-xs" as="div"><Upload size={16} className="mr-2"/> ?臬?遢??</Button>
++            </div>
++        </div>
++        <div className="mt-6 pt-6 border-t border-slate-700"><Button onClick={handleReset} variant="danger" className="w-full text-[10px] uppercase font-bold"><Trash2 size={16} className="mr-2"/> ?蔭銝行??斗???啗???/Button></div>
++      </Card>
++
++      <div className="text-center text-[10px] text-slate-600 pb-4">
++          <p>FinTrack AI</p>
++      </div>
++
++      <Modal isOpen={isPreviewModalOpen} onClose={() => setIsPreviewModalOpen(false)} title="?臬?汗">
++        {previewContent && (
++            <div className="space-y-4">
++                <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700 text-xs">
++                    <p className="text-slate-300">?遢??嚗?span className="font-mono text-white">{previewContent.metadata?.backupDate ? new Date(previewContent.metadata.backupDate).toLocaleString() : 'N/A'}</span></p>
++                    <p className="text-slate-400">?遢?嚗?span className="font-mono text-white">{previewContent.metadata?.appVersion || 'N/A'}</span></p>
++                </div>
++                <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/30 text-xs text-amber-300 flex items-start gap-2">
++                    <AlertCircle size={20}/><span><span className="font-bold">霅血?</span>: ?臬撠?摰閬??函?甇方?蝵桐???????甇斗?雿瘜儔??/span>
++                </div>
++                <h4 className="font-bold text-sm text-slate-200 pt-2">?菜葫?啁?鞈???嚗?/h4>
++                <div className="grid grid-cols-2 gap-3 text-sm">
++                    <div className="flex items-center gap-3 p-3 bg-slate-800 rounded-lg"><PieChart size={20} className="text-emerald-400"/><span>鞈</span><span className="ml-auto font-mono font-bold text-white">{previewContent.stats.assets}</span></div>
++                    <div className="flex items-center gap-3 p-3 bg-slate-800 rounded-lg"><TrendingUp size={20} className="text-violet-400"/><span>?∠巨摨怠?</span><span className="ml-auto font-mono font-bold text-white">{previewContent.stats.stocks}</span></div>
++                    <div className="flex items-center gap-3 p-3 bg-slate-800 rounded-lg"><ScrollText size={20} className="text-amber-400"/><span>鈭斗?蝝??/span><span className="ml-auto font-mono font-bold text-white">{previewContent.stats.transactions}</span></div>
++                    <div className="flex items-center gap-3 p-3 bg-slate-800 rounded-lg"><CalendarClock size={20} className="text-cyan-400"/><span>?箏??嗆</span><span className="ml-auto font-mono font-bold text-white">{previewContent.stats.recurring}</span></div>
++                </div>
++                <div className="flex gap-2 pt-4 border-t border-slate-700">
++                    <Button variant="secondary" onClick={() => setIsPreviewModalOpen(false)} className="flex-1">??</Button>
++                    <Button onClick={handleConfirmImport} className="flex-1">蝣箄?閬?銝血??/Button>
++                </div>
++            </div>
++        )}
++      </Modal>
++
++    </div>
++  );
++};
+\ No newline at end of file

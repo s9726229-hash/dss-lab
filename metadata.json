@@ -1,0 +1,7 @@
+{
+  "name": "FinTrack AI v7",
+  "description": "V6.7.2 - 架構完成版：優化背景任務模組，提升系統穩定性與可維護性。",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}

@@ -14,7 +14,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({ onChangeView }) => {
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-cyan-500 flex items-center justify-center shadow-lg shadow-primary/20">
            <span className="font-bold text-white text-xs">FT</span>
         </div>
-        FinTrack AI
+        DSS Lab
       </div>
       
       <div className="ml-auto">

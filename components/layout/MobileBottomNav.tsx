@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { ViewState } from '../../types';
-import { LayoutGrid, PieChart, ScrollText, CalendarClock, Target, TrendingUp } from 'lucide-react';
+import { Eye, FlaskConical, BookOpen, TrendingUp } from 'lucide-react';
 
 interface MobileBottomNavProps {
   currentView: ViewState;
@@ -34,13 +34,11 @@ const NavItemMobile = ({
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ currentView, onChangeView }) => {
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-md border-t border-slate-800 pb-safe z-50">
-      <div className="grid grid-cols-6 h-16">
-        <NavItemMobile view="DASHBOARD" current={currentView} icon={LayoutGrid} onClick={onChangeView} />
-        <NavItemMobile view="ASSETS" current={currentView} icon={PieChart} onClick={onChangeView} />
+      <div className="grid grid-cols-4 h-16">
         <NavItemMobile view="INVESTMENTS" current={currentView} icon={TrendingUp} onClick={onChangeView} />
-        <NavItemMobile view="TRANSACTIONS" current={currentView} icon={ScrollText} onClick={onChangeView} />
-        <NavItemMobile view="RECURRING" current={currentView} icon={CalendarClock} onClick={onChangeView} />
-        <NavItemMobile view="BUDGET" current={currentView} icon={Target} onClick={onChangeView} />
+        <NavItemMobile view="WATCHLIST" current={currentView} icon={Eye} onClick={onChangeView} />
+        <NavItemMobile view="DSS_LAB" current={currentView} icon={FlaskConical} onClick={onChangeView} />
+        <NavItemMobile view="TECH_DOCS" current={currentView} icon={BookOpen} onClick={onChangeView} />
       </div>
     </div>
   );

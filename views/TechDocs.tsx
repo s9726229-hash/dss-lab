@@ -1,167 +1,133 @@
 import React, { useState } from 'react';
-import { BookOpen, LineChart, ShieldAlert, CheckCircle2, TrendingUp, Lightbulb, Zap, FileText, GitBranch, FlaskConical, CircleDashed, HelpCircle } from 'lucide-react';
+import { BookOpen, LineChart, ShieldAlert, CheckCircle2, TrendingUp, Lightbulb, Zap, FileText, GitBranch, FlaskConical, HelpCircle } from 'lucide-react';
 import { getTechParameters } from '../services/storage';
 import { SignalFlowchart } from '../components/SignalFlowchart';
 
-const StepBadge = ({ status }: { status: 'done' | 'todo' | 'partial' }) => {
-    const map = {
-        done: { icon: CheckCircle2, cls: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', label: '已完成' },
-        partial: { icon: HelpCircle, cls: 'bg-amber-500/20 text-amber-400 border-amber-500/30', label: '部分完成' },
-        todo: { icon: CircleDashed, cls: 'bg-slate-700/50 text-slate-400 border-slate-600/50', label: '尚未開始' },
-    } as const;
-    const { icon: Icon, cls, label } = map[status];
-    return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border ${cls}`}><Icon size={12} />{label}</span>;
-};
 
 const DSSLabParamGuide: React.FC = () => (
     <div className="space-y-6">
-        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h3 className="text-lg font-bold text-slate-200 mb-2 flex items-center gap-2">
-                <FlaskConical className="text-violet-400" /> 目標：從真實交易歷史回推「優化後」的進場參數
-            </h3>
-            <p className="text-sm text-slate-400 leading-relaxed">
-                核心想法：既然有歷史交易紀錄，就能回頭檢視「當時如果換個時間點進場，結果會不會更好」，找出那個更好的進場時間點當下的技術/籌碼指標，反過來當作 DSS 系統的建議參數門檻。整體分六個步驟，皆位於 <b className="text-slate-300">DSS 實驗室</b> 頁面。
-            </p>
+        <p className="text-sm text-slate-400 leading-relaxed px-1">
+            核心目標：從歷史交易紀錄回推「如果進出場時機更精準，技術指標門檻應設多少」，再用統計方法驗證這些門檻是否真的有效（而非只是擬合歷史雜訊）。
+        </p>
+
+        {/* ── 流程示意圖 ── */}
+        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
+            <h3 className="text-sm font-bold text-slate-300 mb-4">流程示意圖</h3>
+            <div className="overflow-x-auto">
+                <svg viewBox="0 0 610 145" width="100%" xmlns="http://www.w3.org/2000/svg" style={{minWidth:'460px',display:'block'}}>
+                    <defs>
+                        <marker id="dss-a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+                            <path d="M0,0 L7,3.5 L0,7 Z" fill="#475569"/>
+                        </marker>
+                    </defs>
+
+                    {/* ── 主流程：6個方塊 ── */}
+                    {/* Box 1: 匯入 x=2 */}
+                    <rect x="2" y="5" width="82" height="54" rx="8" fill="rgba(14,165,233,0.12)" stroke="rgba(14,165,233,0.55)" strokeWidth="1.5"/>
+                    <text x="43" y="27" textAnchor="middle" fill="#7dd3fc" fontSize="11" fontWeight="bold">① 匯入</text>
+                    <text x="43" y="42" textAnchor="middle" fill="#94a3b8" fontSize="10">CSV 交易</text>
+                    <text x="43" y="54" textAnchor="middle" fill="#64748b" fontSize="9">紀錄</text>
+
+                    <line x1="85" y1="32" x2="100" y2="32" stroke="#475569" strokeWidth="1.5" markerEnd="url(#dss-a)"/>
+
+                    {/* Box 2: 配對 x=102 */}
+                    <rect x="102" y="5" width="82" height="54" rx="8" fill="rgba(139,92,246,0.12)" stroke="rgba(139,92,246,0.55)" strokeWidth="1.5"/>
+                    <text x="143" y="27" textAnchor="middle" fill="#c4b5fd" fontSize="11" fontWeight="bold">② 配對</text>
+                    <text x="143" y="42" textAnchor="middle" fill="#94a3b8" fontSize="10">FIFO 完整</text>
+                    <text x="143" y="54" textAnchor="middle" fill="#64748b" fontSize="9">交易</text>
+
+                    <line x1="185" y1="32" x2="200" y2="32" stroke="#475569" strokeWidth="1.5" markerEnd="url(#dss-a)"/>
+
+                    {/* Box 3: 視窗 x=202 */}
+                    <rect x="202" y="5" width="82" height="54" rx="8" fill="rgba(139,92,246,0.12)" stroke="rgba(139,92,246,0.55)" strokeWidth="1.5"/>
+                    <text x="243" y="27" textAnchor="middle" fill="#c4b5fd" fontSize="11" fontWeight="bold">③ 視窗</text>
+                    <text x="243" y="42" textAnchor="middle" fill="#94a3b8" fontSize="10">±10日進場</text>
+                    <text x="243" y="54" textAnchor="middle" fill="#64748b" fontSize="9">＋出場</text>
+
+                    <line x1="285" y1="32" x2="300" y2="32" stroke="#475569" strokeWidth="1.5" markerEnd="url(#dss-a)"/>
+
+                    {/* Box 4: 中位數 x=302 */}
+                    <rect x="302" y="5" width="82" height="54" rx="8" fill="rgba(139,92,246,0.12)" stroke="rgba(139,92,246,0.55)" strokeWidth="1.5"/>
+                    <text x="343" y="27" textAnchor="middle" fill="#c4b5fd" fontSize="11" fontWeight="bold">④ 中位數</text>
+                    <text x="343" y="42" textAnchor="middle" fill="#94a3b8" fontSize="10">類別×訓練</text>
+                    <text x="343" y="54" textAnchor="middle" fill="#64748b" fontSize="9">期 70%</text>
+
+                    <line x1="385" y1="32" x2="400" y2="32" stroke="#475569" strokeWidth="1.5" markerEnd="url(#dss-a)"/>
+
+                    {/* Box 5: 設定檔 x=402 */}
+                    <rect x="402" y="5" width="82" height="54" rx="8" fill="rgba(16,185,129,0.12)" stroke="rgba(16,185,129,0.55)" strokeWidth="1.5"/>
+                    <text x="443" y="27" textAnchor="middle" fill="#6ee7b7" fontSize="11" fontWeight="bold">⑤ 設定檔</text>
+                    <text x="443" y="42" textAnchor="middle" fill="#94a3b8" fontSize="10">BUY / SELL</text>
+                    <text x="443" y="54" textAnchor="middle" fill="#64748b" fontSize="9">/ STOP LOSS</text>
+
+                    <line x1="485" y1="32" x2="500" y2="32" stroke="#475569" strokeWidth="1.5" markerEnd="url(#dss-a)"/>
+
+                    {/* Box 6: 驗證 x=502 */}
+                    <rect x="502" y="5" width="82" height="54" rx="8" fill="rgba(14,165,233,0.12)" stroke="rgba(14,165,233,0.55)" strokeWidth="1.5"/>
+                    <text x="543" y="27" textAnchor="middle" fill="#7dd3fc" fontSize="11" fontWeight="bold">⑥ 回測</text>
+                    <text x="543" y="42" textAnchor="middle" fill="#94a3b8" fontSize="10">Match Rate</text>
+                    <text x="543" y="54" textAnchor="middle" fill="#64748b" fontSize="9">背離分析</text>
+
+                    {/* ── 統計驗證分支（從④向下） ── */}
+                    <line x1="343" y1="60" x2="343" y2="80" stroke="rgba(167,139,250,0.6)" strokeWidth="1.5" strokeDasharray="4,3"/>
+                    <rect x="155" y="80" width="376" height="48" rx="8" fill="rgba(109,40,217,0.1)" stroke="rgba(109,40,217,0.45)" strokeWidth="1"/>
+                    <text x="343" y="100" textAnchor="middle" fill="#a78bfa" fontSize="11" fontWeight="bold">統計驗證（2026-07-13）</text>
+                    <text x="343" y="116" textAnchor="middle" fill="#64748b" fontSize="9">驗證期 30% 純計算檢驗  ⊕  前瞻報酬分析  ⊕  RSI / 斜率增量價值分析</text>
+                    <text x="343" y="128" textAnchor="middle" fill="#475569" fontSize="9">→ 詳見「分析摘要」分頁</text>
+                </svg>
+            </div>
         </div>
 
-        <div className="space-y-4">
-            {/* Step 1 */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="w-6 h-6 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center">1</span>
-                    <h4 className="font-bold text-slate-200">標的勝率排行</h4>
-                    <StepBadge status="done" />
-                </div>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                    把股票交易紀錄用 FIFO 配對成完整的「買進→賣出」交易，排除當沖（持倉 0 天），並依 ETF / 上市 / 上櫃分類、算出每檔標的的勝率、損益統計。這是後面三步的資料基礎。
-                </p>
-                <div className="mt-2 p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-xs text-emerald-300">
-                    ✅ 修正重大資料正確性 bug：原本 FIFO 配對是「一筆買進對一筆賣出」，完全沒處理股數。當一筆賣出同時平掉多筆買進（或一筆買進被分批賣出）時，會配對到錯誤的買賣組合，算出離譜的持倉天數與報酬率（實測案例：錯誤配對出 313 天持倉、+559% 報酬，修正後正確應為 18 天、+20%）。現已改成依實際股數拆分/合併，損益也依比例正確分攤。
-                </div>
-            </div>
+        {/* ── 六步驟（簡化版） ── */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
-            {/* Step 2 */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="w-6 h-6 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center">2</span>
-                    <h4 className="font-bold text-slate-200">±N日最佳進場分析</h4>
-                    <StepBadge status="done" />
+            {/* ① FIFO配對 */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                    <span className="w-5 h-5 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center shrink-0">①</span>
+                    <h4 className="font-bold text-slate-200 text-sm">FIFO 配對</h4>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed mb-2">
-                    對每筆完整交易，在實際進場日前後 ±10 個交易日的範圍內，用<b className="text-slate-300">報酬最大化</b>（固定賣出價格下，找 (賣價-買價)/買價 最大的那天）找出「最佳進場日」，並在實際進場日與最佳進場日兩邊，都計算：
-                </p>
-                <ul className="text-sm text-slate-400 list-disc list-inside space-y-0.5">
-                    <li>Bias5 / Bias10 / Bias20（乖離率）</li>
-                    <li>RSI</li>
-                    <li>斜率連續上升天數（呼應設定頁的 xxxBuySlopeDays 概念）</li>
-                    <li>外資 / 投信連買天數、融資連增天數</li>
-                </ul>
-                <p className="text-xs text-slate-500 mt-2">實作重用了 DSS 回測分析的核心計算函式（computeDSSForDate），確保跟現有回測邏輯算法一致，不是另外兜一套。視窗天數已簡化為固定 ±10 日（原本 ±5/±10 可切換，拿掉是為了讓進場/出場分析的原始資料快取鍵一致、可互相重用）。</p>
+                <p className="text-xs text-slate-400">CSV 匯入 → 依股數 FIFO 配對完整交易，依 ETF／上市／上櫃分類，排除當沖。</p>
             </div>
-
-            {/* Step 2.5 */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="w-6 h-6 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center">+</span>
-                    <h4 className="font-bold text-slate-200">出場分析（對稱於 Step2，找最佳「出場」日）</h4>
-                    <StepBadge status="done" />
+            {/* ② ±10日進場視窗 */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                    <span className="w-5 h-5 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center shrink-0">②</span>
+                    <h4 className="font-bold text-slate-200 text-sm">±10日進場視窗</h4>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed mb-2">
-                    邏輯與 Step2 對稱但方向相反：固定買入價，在實際出場日前後 ±10 個交易日內找報酬最大化（等同<b className="text-slate-300">最高價</b>）的出場點，同樣計算 RSI/斜率/籌碼等指標。搜尋範圍限制<b className="text-slate-300">不早於實際買入日</b>，避免短持倉交易的進場/出場視窗互相打架。
-                </p>
-                <p className="text-xs text-slate-500 mt-2">與 Step2 共用同一份原始資料快取（symbol+日期範圍+視窗天數相同即可重用），已跑過 Step2 的話，出場分析幾乎零額外 FinMind 呼叫。畫面上「開始分析／匯出全域數據／匯入全域數據」已整合成單一工具列，常駐在 DSS 實驗室頁面最上方（不論切到哪個分頁都看得到），一次跑完進場+出場兩組結果；匯出/匯入則只針對原始資料快取本身，與分析結果無關（詳見下方「已知限制」）。</p>
-                <p className="text-xs text-slate-500 mt-1">
-                    （2026-07-07 更新）出場分析依這筆完整交易<b className="text-slate-300">最終是獲利還是虧損</b>分流成兩條路，不再混在一起找「最高價」：
-                    獲利交易找窗口內報酬最大化的一天（停利點）；虧損交易同樣找報酬最大化的一天，但意義是「損失最小的停損點」。
-                    同時窗口計算也從「日曆天」改成「交易日」（依 kline 陣列實際位置取 ±N 筆，而非用日期相減），避免最佳日剛好卡在週五、週末不開盤導致鄰近樣本抓不滿。
-                </p>
+                <p className="text-xs text-slate-400">固定賣出價，前後 ±10 交易日找報酬最大日，記錄 Bias／RSI／斜率／籌碼指標。</p>
             </div>
-
-            {/* Step 3 */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="w-6 h-6 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center">3</span>
-                    <h4 className="font-bold text-slate-200">依分類取中位數（進場+出場皆有，一般買進 vs 強買門檻兩套平行邏輯）</h4>
-                    <StepBadge status="done" />
+            {/* ③ ±10日出場視窗 */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                    <span className="w-5 h-5 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center shrink-0">③</span>
+                    <h4 className="font-bold text-slate-200 text-sm">±10日出場視窗</h4>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                    把 Step2／出場分析每筆交易「最佳日」的各項指標，先套用<b className="text-slate-300">優質數據篩選</b>：依分類（ETF/上市/上櫃）分組後，依改善幅度排序，僅保留前 70%（排除改善幅度最低的 30%，這類樣本代表視窗內價格幾乎沒波動、最佳日跟實際日指標雷同，沒有學習價值），篩完才取中位數。畫面上會顯示篩選前後樣本數與門檻值，不是黑箱。
-                </p>
-                <p className="text-xs text-slate-500 mt-2">
-                    （2026-07-06 更新）中位數樣本改用兩套平行邏輯，服務不同嚴格程度的門檻：
-                    <b className="text-slate-300">一般買進門檻</b>找到最佳日後，再抓該日 ±2 個交易日的技術面/籌碼面指標一起納入樣本池取中位數，樣本從 1 筆擴大到最多 5 筆，避免單一天的極端值主導參數；
-                    <b className="text-slate-300">強買門檻</b>刻意維持只取單一最佳日（不含 ±2 日鄰近樣本），比一般買進更嚴格、更貼近真正的最佳時機。兩者互不影響，畫面上「±N日最佳進場分析」分頁會分開顯示兩組中位數卡片。
-                </p>
-                <p className="text-xs text-slate-500 mt-2">
-                    （2026-07-07 更新）出場端仿照進場的做法，依「Step2.5 的獲利/虧損分流」再各自拆成一般/嚴格兩層，總共形成 <b className="text-slate-300">6 組參數資料庫</b>：
-                </p>
-                <ul className="text-xs text-slate-500 list-disc list-inside space-y-0.5 ml-2">
-                    <li><b className="text-slate-300">BUY / STRONG BUY</b>：進場端，如上所述。</li>
-                    <li><b className="text-slate-300">SELL（停利）</b>：僅取最終獲利交易，±2 日樣本池中位數。</li>
-                    <li><b className="text-slate-300">FORCE SELL（強制停利）</b>：僅取最終獲利交易，單一最佳出場日中位數（不含 ±2 樣本），比 SELL 更嚴格。</li>
-                    <li><b className="text-slate-300">STOP LOSS（停損）</b>：僅取最終虧損交易，找窗口內「損失最小」的停損點，±2 日樣本池中位數。</li>
-                    <li><b className="text-slate-300">FORCE STOP LOSS（強制停損／最危險狀態）</b>：僅取最終虧損交易，找窗口內「損失最大」的一天（跟 STOP LOSS 方向相反），單一日中位數，用來刻畫最危險狀態的指標特徵。</li>
-                </ul>
-                <p className="text-xs text-slate-500 mt-2">「±N日最佳進場分析」分頁顯示 BUY/STRONG BUY 兩組卡片；「出場分析」分頁依序顯示 SELL/FORCE SELL 卡片與 STOP LOSS/FORCE STOP LOSS 卡片（各自的優質數據篩選門檻與樣本數獨立計算，因為獲利/虧損是兩個互斥的母體）。</p>
+                <p className="text-xs text-slate-400">獲利 → 最佳停利點；虧損 → 損失最小停損點。各有 ±2 日樣本池（一般）與單日（嚴格）兩套。</p>
             </div>
-
-            {/* Step 4 */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="w-6 h-6 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center">4</span>
-                    <h4 className="font-bold text-slate-200">進場條件分析（提取優化後參數 → 存成設定檔）</h4>
-                    <StepBadge status="done" />
+            {/* ④ 類別中位數 */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                    <span className="w-5 h-5 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center shrink-0">④</span>
+                    <h4 className="font-bold text-slate-200 text-sm">類別中位數</h4>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed">
-                    把 Step3 算出來的「最佳進場日／出場日」中位數，擴充進 DSS 設定檔（DSSProfile）結構一起存起來，存檔後可在系統設定頁一鍵套用回技術面參數。刻意不動原本既有的「進場條件分析」（Winner/Loser）機制，改在工具列新增一顆並列的「儲存為設定檔」按鈕，兩套機制平行存在。
-                </p>
-                <p className="text-xs text-slate-500 mt-2">已完成（2026-07-04）。乖離/RSI/斜率會自動套用；外資/投信/融資與出場 RSI/斜率因為技術面參數目前沒有對應欄位（籌碼門檻是全域值、非分類；也沒有 xxxPartialSellRsi 欄位），僅顯示為參考數值、不自動套用。數值皆四捨五入至小數點後 2 位再存檔。</p>
-                <p className="text-xs text-slate-500 mt-1">（2026-07-06 更新）新增<b className="text-slate-300">強買門檻</b>自動套用：設定檔多存一組 strongBias20/strongRsi/strongSlopeUpDays（取自 Step3 的單一最佳日中位數），套用時會分別寫入 xxxStrongBuyBias/xxxStrongBuyRsi/xxxStrongBuySlopeDays，與一般買進門檻的欄位互不覆蓋。</p>
-                <p className="text-xs text-slate-500 mt-1">
-                    （2026-07-07 更新）出場端新增 <b className="text-slate-300">FORCE SELL</b>（exitForceBias20，套用至 xxxForceSellBias／ETF 是 etfSecondPartialSellBias）與 <b className="text-slate-300">STOP LOSS</b>（stopLossBias20，套用至 xxxStopLossBias）兩組自動套用欄位；<b className="text-slate-300">ETF 因無停損機制（視為長線持有），STOP LOSS 不套用</b>。<b className="text-slate-300">FORCE STOP LOSS</b>（forceStopLossBias20，最危險狀態特徵）目前技術面參數沒有對應欄位，僅顯示為參考數值、不自動套用。
-                </p>
+                <p className="text-xs text-slate-400">訓練期 70%，品質篩選前 70%，取中位數 → BUY／STRONG BUY／SELL／STOP LOSS 四組參數。</p>
             </div>
-
-            {/* Step 5 */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="w-6 h-6 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center">5</span>
-                    <h4 className="font-bold text-slate-200">套用新參數 → 驗證命中率（Match Rate）與燈號分布</h4>
-                    <StepBadge status="done" />
+            {/* ⑤ 存設定檔 */}
+            <div className="bg-slate-800/50 border border-emerald-700/30 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600/30 text-emerald-300 text-xs font-bold flex items-center justify-center shrink-0">⑤</span>
+                    <h4 className="font-bold text-slate-200 text-sm">存設定檔</h4>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed mb-2">
-                    把 Step4 存好的設定檔套用回技術面參數後，用新參數重跑一次 DSS 回測分析，用幾個指標驗證「換參數是不是真的變好」，而不是存了就當作結束：
-                </p>
-                <ul className="text-sm text-slate-400 list-disc list-inside space-y-0.5">
-                    <li><b className="text-slate-300">命中率（Match Rate）</b>：重用 DSS 回測分析既有的 MATCH / DIVERGE / PARTIAL 吻合度判斷，比較套用新參數前後，歷史交易的吻合度有沒有實際提升。</li>
-                    <li><b className="text-slate-300">虛擬（最佳進出場）命中率比較</b>：把 Step2/3 找到的最佳進場日/出場日當模擬交易，重算訊號吻合度，跟實際交易的命中率並排顯示在同一張卡片裡（BUY/SELL 吻合率卡片下方一行小字）。兩邊樣本母體不同（虛擬命中率是完整交易 FIFO 配對後的樣本，實際命中率是全部訊號驅動交易），只能看趨勢不能直接相減，但可以看出「如果進出場時機抓得更準，理論上命中率能到多高」，藉此排除額度不足/定期定額/加碼誤判等雜訊干擾，判斷新參數本身是否合理。</li>
-                    <li><b className="text-slate-300">買進背離 × 已實現損益交叉檢視</b>：DSS 回測分析的 BUY 列展開詳情，新增「配對已實現損益」——用交易 id 直接串到「標的勝率排行」FIFO 配對後的已實現損益，若「訊號背離」但配對到的賣出其實有賺錢，會特別標註「雖背離但實際獲利」，代表這筆背離不一定是參數的問題。</li>
-                    <li><b className="text-slate-300">賣出 × ±10日最佳賣點</b>：SELL 列展開詳情新增「±10日最佳賣點」，顯示同一筆交易若在 ±10 天內的最佳時機出場，報酬率會是多少，跟實際報酬並排比較，用來評估要不要調整停利門檻。</li>
-                    <li><b className="text-slate-300">燈號分布</b>：統計新參數下，各檔標的落在 STRONG_BUY／BUY／WATCH_DIVERGE／SELL 等各訊號燈號的筆數分布，避免出現「新參數太寬鬆變成全部強買」或「太嚴苛完全不觸發」這種失真結果，當作換參數前的健檢。</li>
-                </ul>
-                <p className="text-xs text-slate-500 mt-2">
-                    已知會影響吻合率、但非參數本身問題的干擾因素：(1) FinMind 額度常在批次回測中途用盡，導致部分標的顯示「K線資料無法取得」，樣本不完整（已用共用快取大幅緩解，但無法完全消除）；(2) 早期發現 BUY 背離裡有 60% 其實是「加碼」被誤判成進場失敗（已藉由簡化 V5.0 訊號層級處理，但沒有改變回測本身的吻合率數字，因為回測引擎本來就沒有加碼訊號可比對，這也是新增「買進背離×已實現損益」的原因之一）；(3) 定期定額交易會稀釋吻合率統計，已新增排除機制。
-                </p>
+                <p className="text-xs text-slate-400">一鍵將 Bias20／RSI／斜率套用至系統設定（DSS 參數）；籌碼／強制停利欄位顯示為參考值。</p>
             </div>
-
-            {/* Step 6 */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
-                <div className="flex items-center gap-2 mb-2">
-                    <span className="w-6 h-6 rounded-full bg-violet-600/30 text-violet-300 text-xs font-bold flex items-center justify-center">6</span>
-                    <h4 className="font-bold text-slate-200">背離分析（分類統計：漏判／誤判／時點偏移／過早／過晚）</h4>
-                    <StepBadge status="done" />
+            {/* ⑥ 回測驗證 */}
+            <div className="bg-slate-800/50 border border-sky-700/30 rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                    <span className="w-5 h-5 rounded-full bg-sky-600/30 text-sky-300 text-xs font-bold flex items-center justify-center shrink-0">⑥</span>
+                    <h4 className="font-bold text-slate-200 text-sm">回測驗證</h4>
                 </div>
-                <p className="text-sm text-slate-400 leading-relaxed mb-2">
-                    （2026-07-07 新增）Step5 的「命中率」只回答「吻合還是背離」，沒有回答「背離的原因是什麼」。背離分析頁籤把 254 筆完整交易依三類拆解，直接呈現各類佔比，取代原本已移除的「進場條件分析」（Winner/Loser 均值比較，使用者評估後認為用不到）：
-                </p>
-                <ul className="text-sm text-slate-400 list-disc list-inside space-y-0.5">
-                    <li><b className="text-slate-300">買進背離</b>：串 DSS 回測快取（BacktestResult.alignment）與「標的勝率排行」FIFO 已實現損益（透過交易 id 對應）——<b className="text-slate-300">誤判</b>＝訊號判定 MATCH 但實際虧損；<b className="text-slate-300">漏判</b>＝訊號未判定 MATCH（DIVERGE/PARTIAL）但實際獲利；<b className="text-slate-300">時點偏移</b>＝Step2 算出的最佳進場日與實際進場日相差超過 3 天（不論吻合與否都算）。三者是各自獨立的統計口徑，同一筆交易可能同時落在多個分類。</li>
-                    <li><b className="text-slate-300">賣出（SELL）過早／過晚</b>：僅取最終獲利交易，比較出場分析算出的「最佳出場日」與實際賣出日——最佳日在實際賣出日之後＝賣太早；在之前＝賣太晚（該漲的時候賣掉了 vs 該賣的時候沒賣，抱過頭）。</li>
-                    <li><b className="text-slate-300">停損（STOP LOSS）過早／過晚</b>：邏輯同上但取最終虧損交易、比較對象是「損失最小的停損點」——過早＝停損點在實際停損日之後（可以再撐一下）；過晚＝停損點在實際停損日之前（應該早點停損，抱著虧損擴大）。</li>
-                </ul>
-                <p className="text-xs text-slate-500 mt-2">
-                    這頁只做分類統計與明細列表，可對照「±N日最佳進場分析」/「出場分析」頁籤中既有的中位數參數卡片（那兩頁維持原樣未搬動）。<b className="text-slate-300">刻意不包含</b>分位數（Q10/Q25/Q75/Q90）修正與自動收斂迴圈——這兩項屬於「DSS 背離分析模組 V1.0」構想文件中的中／低可行性部分，使用者評估後決定先暫停，之後有需要再討論（收斂迴圈尤其需要先定義「收斂」的量化停止標準，否則容易做出不知道何時該停的東西）。
-                </p>
+                <p className="text-xs text-slate-400">新參數套回歷史資料，看 Match Rate 提升幅度 + 背離原因（漏判／誤判／時點偏移）分類統計。</p>
             </div>
         </div>
 
@@ -211,43 +177,27 @@ const DSSLabParamGuide: React.FC = () => (
             </div>
         </div>
 
-        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h3 className="text-base font-bold text-slate-200 mb-3 flex items-center gap-2">
-                <HelpCircle className="text-amber-400" size={18} /> 待確認事項
-            </h3>
-            <ul className="text-sm text-slate-400 space-y-2 list-disc list-inside">
-                <li>目前分析是 ETF / 上市 / 上櫃「混在一起跑」，事後才依分類統計中位數，如果要「先分類、各分類獨立跑」是另一個架構調整，目前未採用此方向。</li>
-            </ul>
-        </div>
-
-        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h3 className="text-base font-bold text-slate-200 mb-3 flex items-center gap-2">
-                <Lightbulb className="text-sky-400" size={18} /> 未來規劃（尚未實作，先記錄構想）
-            </h3>
-            <ul className="text-sm text-slate-400 space-y-3 list-disc list-inside">
-                <li>
-                    <b className="text-slate-300">參數版本化</b>：DSS 設定檔目前是單純的清單（存了就是一筆），未來希望能有「版本」概念，把不同版本的參數組合套進同一份歷史資料重跑，直接比較 Match Rate / 燈號分布等績效差異，方便判斷新參數是不是真的比舊版好，而不是憑感覺換。
-                </li>
-                <li>
-                    <b className="text-slate-300">匯入交易紀錄自動觸發分析</b>：目前「標的勝率排行」與「DSS 回測分析」都要手動點按鈕才會跑。未來希望匯入股票交易 CSV 後就自動觸發這兩項分析，資料一進來就能立刻檢視每一筆交易目前落在哪個環節/狀態，不用額外操作。
-                </li>
-                <li>
-                    <b className="text-slate-300">背離分位數修正 + 自動收斂迴圈</b>：Step6 目前只做分類統計。「DSS 背離分析模組 V1.0」構想文件中還有依分位數（Q10/Q25/Q75/Q90）自動調整參數、並反覆重跑驗證直到結果收斂的迴圈設計，使用者評估後決定先暫停——分位數修正牽涉到跟現有「優質數據篩選（前70%）＋中位數」邏輯如何整合還沒想清楚，收斂迴圈更需要先定義好量化的收斂/停止標準，否則容易做出不知道何時該停的自動化機制。
-                </li>
-            </ul>
-        </div>
-
-        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-            <h3 className="text-base font-bold text-slate-200 mb-3 flex items-center gap-2">
-                <ShieldAlert className="text-red-400" size={18} /> 已知限制
-            </h3>
-            <ul className="text-sm text-slate-400 space-y-2 list-disc list-inside">
-                <li>分析要對每檔標的打 3 種 FinMind 資料（股價/籌碼/融資），交易筆數多時請求量很大，容易撞到 FinMind 額度限制（曾實測出現 402 Requests reach the upper limit，甚至更嚴重的連線被拒）。帳號後台「API 使用量」顯示的用量，跟實際資料查詢端點的限制不一定同步，數字看起來夠用也可能還是打不通。</li>
-                <li>因應額度問題：(1) 進場分析與出場分析共用同一份<b className="text-slate-300">原始資料快取</b>（`ft_dsslab_raw_cache`，鍵值為 symbol+日期範圍+視窗天數），只要交易組合與視窗天數相同就直接重用，不重打 API；(2) <b className="text-slate-300">匯出全域數據 / 匯入全域數據</b>按鈕（常駐於 DSS 實驗室頁面最上方，不需先跑完分析）可在額度充足的裝置上匯出這份原始資料快取 JSON，再拿到別的裝置匯入使用，匯入採<b className="text-slate-300">依 key 合併</b>（覆蓋同標的的舊資料，其餘既有快取保留），不會整包覆蓋清空其他標的的快取；(3) <b className="text-slate-300">DSS 回測分析</b>（已併入 DSS 實驗室，作為第五個分頁）也會先檢查這份快取，日期範圍有涵蓋（含 10 天容許誤差，避免交易日曆換算誤差擋下明明夠用的快取）才直接重用，不夠新才回頭打 FinMind——實測涵蓋率從 0/75 提升到 47/75 檔，FinMind 呼叫量下降約 43%。但快取終究會過期：只要快取的資料日期沒涵蓋到最新交易日，還是得重新打 API，額度用盡時該檔就會顯示「K線資料無法取得」。</li>
-                <li>標的名稱顯示（中文股票名）依賴 FinMind 的 TaiwanStockInfo 查詢，若額度/連線有問題，畫面上會退回顯示股票代號，屬正常降級行為，非程式錯誤。</li>
-                <li>修正 FIFO 配對後，同一份交易紀錄算出的「完整交易」筆數會變多（因為一筆賣出可能拆成對應多筆買進的多筆紀錄），且部分標的的「最早買入日～最晚賣出日」範圍可能改變，導致原始資料快取鍵對不上、該標的需要重新向 FinMind 抓取（實測約 10-15% 標的會受影響，其餘可正常吃快取）。</li>
-                <li><b className="text-slate-300">定期定額（定期定額扣款）交易</b>非訊號驅動，若混在一起算 Match Rate 會拉低統計意義。已在「歷史交易明細」新增手動標記 + 依金額/日期規律的自動偵測按鈕，標記後 DSS 回測分析會自動排除這些交易。</li>
-            </ul>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4">
+                <h3 className="text-sm font-bold text-amber-300 mb-2 flex items-center gap-1.5"><HelpCircle size={15} /> 待確認</h3>
+                <p className="text-xs text-slate-400">各分類目前是「混合跑、事後分類統計」，並非先各自獨立跑；後者是另一種架構，目前不採用。</p>
+            </div>
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4">
+                <h3 className="text-sm font-bold text-sky-300 mb-2 flex items-center gap-1.5"><Lightbulb size={15} /> 未來規劃</h3>
+                <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+                    <li>參數版本化：不同 DSSProfile 互比績效</li>
+                    <li>匯入交易後自動觸發分析</li>
+                    <li>分位數修正暫緩（收斂迴圈尚無量化停止標準）</li>
+                </ul>
+            </div>
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4">
+                <h3 className="text-sm font-bold text-red-300 mb-2 flex items-center gap-1.5"><ShieldAlert size={15} /> 已知限制</h3>
+                <ul className="text-xs text-slate-400 space-y-1 list-disc list-inside">
+                    <li>FinMind 額度用盡時資料取得失敗；共用原始資料快取可緩解但無法消除</li>
+                    <li>FIFO 修正後約 10–15% 標的快取失效，需重抓</li>
+                    <li>定期定額交易拉低 Match Rate；已支援手動標記排除</li>
+                </ul>
+            </div>
         </div>
     </div>
 );

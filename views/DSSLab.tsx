@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { FlaskConical, Trophy, Target, ChevronDown, ChevronUp, BarChart2, Zap, Loader2, Save, Download, Upload, History } from 'lucide-react';
+import { FlaskConical, Trophy, Target, ChevronDown, ChevronUp, BarChart2, Zap, Loader2, Save, Download, Upload, History, TrendingUp } from 'lucide-react';
 import { StockTransaction, BacktestResult } from '../types';
-import { lookupStockName, fetchKlineWindow, computeMultiBias, computeDSSForDate, fetchHistoricalInstForBacktest, fetchHistoricalMarginForBacktest, CompletedTrade, buildCompletedTrades } from '../services/stock';
+import { lookupStockName, fetchKlineWindow, computeMultiBias, computeDSSForDate, fetchHistoricalInstForBacktest, fetchHistoricalMarginForBacktest, CompletedTrade, buildCompletedTrades, loadDSSLabRawCache } from '../services/stock';
 import { getBacktestCache, getDSSProfiles, saveDSSProfiles, DSSProfile, getTechParameters } from '../services/storage';
 import { BacktestView } from './BacktestView';
 
@@ -209,14 +209,49 @@ interface RawCacheEntry {
 const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ results }) => {
     const [optimalCatTab, setOptimalCatTab] = useState<'ETF' | '上市' | '上櫃'>('上市');
 
-    const optimalCatStats = useMemo(() => {
+    /** ①③ 各分類依進場日期切訓練/驗證期 */
+    const entrySplits = useMemo(() => {
         if (!results?.length) return null;
-        const etf = buildOptimalCatStats(results, 'ETF');
-        const listed = buildOptimalCatStats(results, '上市');
-        const otc = buildOptimalCatStats(results, '上櫃');
+        const out = {} as Record<'ETF' | '上市' | '上櫃', DateSplit<WindowResult>>;
+        (['ETF', '上市', '上櫃'] as const).forEach(cat => {
+            out[cat] = splitByDate(results.filter(r => r.category === cat), r => r.buyDate);
+        });
+        return out;
+    }, [results]);
+
+    // 中位數參數只用訓練期計算（KEEP_RATIO 品質篩選在 buildOptimalCatStats 內也僅作用於訓練期，防資訊洩漏）
+    const optimalCatStats = useMemo(() => {
+        if (!entrySplits) return null;
+        const etf = buildOptimalCatStats(entrySplits.ETF.train, 'ETF');
+        const listed = buildOptimalCatStats(entrySplits.上市.train, '上市');
+        const otc = buildOptimalCatStats(entrySplits.上櫃.train, '上櫃');
         if (!etf && !listed && !otc) return null;
         return { ETF: etf, 上市: listed, 上櫃: otc };
-    }, [results]);
+    }, [entrySplits]);
+
+    const indicatorMap = useMemo(() => results?.length ? buildSymbolIndicatorMap(loadDSSLabRawCache()) : null, [results]);
+
+    /** 驗證期檢驗：以訓練期中位數（Bias20 ≤ 門檻 且 RSI < 門檻）當進場規則，套到訓練/驗證期各自的交易上 */
+    const entryValidation = useMemo(() => {
+        if (!entrySplits || !indicatorMap || !optimalCatStats) return null;
+        const out = {} as Record<'ETF' | '上市' | '上櫃', { cutoffDate: string | null; train: SplitRuleMetric; val: SplitRuleMetric } | null>;
+        (['ETF', '上市', '上櫃'] as const).forEach(cat => {
+            const stats = optimalCatStats[cat];
+            const split = entrySplits[cat];
+            if (!stats || (stats.medBias20 === null && stats.medRsi === null) || !split.val.length) { out[cat] = null; return; }
+            const qualifies = (d: DailyIndicatorRow) =>
+                (stats.medBias20 === null || (d.bias20 !== null && d.bias20 <= stats.medBias20)) &&
+                (stats.medRsi === null || (d.rsi !== null && d.rsi < stats.medRsi));
+            const simReturn = (t: WindowResult, d: DailyIndicatorRow) =>
+                t.sellPrice > 0 && d.close > 0 ? ((t.sellPrice - d.close) / d.close) * 100 : null;
+            out[cat] = {
+                cutoffDate: split.cutoffDate,
+                train: evalRuleOnTrades(split.train, indicatorMap, t => t.buyDate, qualifies, simReturn, t => t.actualReturn),
+                val: evalRuleOnTrades(split.val, indicatorMap, t => t.buyDate, qualifies, simReturn, t => t.actualReturn),
+            };
+        });
+        return out;
+    }, [entrySplits, indicatorMap, optimalCatStats]);
 
     const avgImprovement = results?.length ? avg(results.map(r => r.improvement)) : null;
     const couldImprove = results?.filter(r => r.improvement > 0.5).length ?? 0;
@@ -345,8 +380,8 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                         {optimalCatStats && (
                             <div className="pt-4 border-t border-slate-700 space-y-3">
                                 <div className="flex items-center gap-2">
-                                    <h4 className="text-sm font-bold text-slate-200">最佳進場點參數中位數</h4>
-                                    <span className="text-xs text-slate-500">依分類彙總 — 可套用為進場門檻參考值</span>
+                                    <h4 className="text-sm font-bold text-slate-200">最佳進場點參數中位數（訓練期參數）</h4>
+                                    <span className="text-xs text-slate-500">各分類依進場日期前 {Math.round(TRAIN_RATIO * 100)}% 為訓練期計算，後 {Math.round((1 - TRAIN_RATIO) * 100)}% 留作下方驗證期檢驗</span>
                                 </div>
                                 <div className="flex gap-1">
                                     {(['ETF', '上市', '上櫃'] as const).map(tab => {
@@ -372,7 +407,7 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                 {optimalCatStats[optimalCatTab] ? (
                                     <>
                                     <div className="text-xs text-slate-500">
-                                        優質數據篩選：改善幅度前 70%（{optimalCatStats[optimalCatTab]!.rawN} 筆中保留 {optimalCatStats[optimalCatTab]!.n} 筆，門檻 ≥ {optimalCatStats[optimalCatTab]!.qualityCutoff.toFixed(1)}%）
+                                        優質數據篩選：改善幅度前 70%（訓練期 {optimalCatStats[optimalCatTab]!.rawN} 筆中保留 {optimalCatStats[optimalCatTab]!.n} 筆，門檻 ≥ {optimalCatStats[optimalCatTab]!.qualityCutoff.toFixed(1)}%）
                                     </div>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                         <StatCard label="RSI 中位數" value={optimalCatStats[optimalCatTab]!.medRsi?.toFixed(1) ?? '-'} color="text-amber-300" />
@@ -392,8 +427,13 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                     </div>
                                     </>
                                 ) : (
-                                    <div className="text-xs text-slate-500 py-4 text-center">此類別資料不足（上市/上櫃需 ≥3 筆，ETF 需 ≥1 筆）</div>
+                                    <div className="text-xs text-slate-500 py-4 text-center">此類別訓練期資料不足（上市/上櫃需 ≥3 筆，ETF 需 ≥1 筆）</div>
                                 )}
+                                <SplitValidationCard
+                                    title="驗證期檢驗（進場）"
+                                    ruleDesc={`規則：Bias20 ≤ ${optimalCatStats[optimalCatTab]?.medBias20?.toFixed(1) ?? '—'}% 且 RSI < ${optimalCatStats[optimalCatTab]?.medRsi?.toFixed(1) ?? '—'}（訓練期中位數）`}
+                                    data={entryValidation?.[optimalCatTab]}
+                                />
                             </div>
                         )}
                     </>
@@ -443,6 +483,208 @@ const computeNearBestSamples = (
             marginConsecIncrease: dss?.marginConsecIncrease ?? null,
         };
     });
+};
+
+// ── 第一階段①③：Train/Test 日期切分 ＋ 標的分佈檢查（防偽重複）─────────────
+/** 各分類內依交易日期排序，前 70% 日期＝訓練期（參數計算），後 30%＝驗證期（純檢驗） */
+const TRAIN_RATIO = 0.7;
+
+interface DateSplit<T> { train: T[]; val: T[]; cutoffDate: string | null; }
+
+/** 依日期切訓練/驗證期；同日期交易強制落在同一側，避免同一天的資訊同時進訓練與驗證 */
+const splitByDate = <T,>(list: T[], getDate: (t: T) => string): DateSplit<T> => {
+    if (list.length < 2) return { train: list, val: [], cutoffDate: null };
+    const sorted = [...list].sort((a, b) => getDate(a).localeCompare(getDate(b)));
+    const cutoffDate = getDate(sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(sorted.length * TRAIN_RATIO) - 1))]);
+    return {
+        train: sorted.filter(t => getDate(t) <= cutoffDate),
+        val: sorted.filter(t => getDate(t) > cutoffDate),
+        cutoffDate,
+    };
+};
+
+/** 每日指標列：Bias20 / RSI14 計算方式與 computeDSSForDate 一致（Wilder RSI 以序列起點為種子），
+ *  用單次滾動計算取代逐日呼叫 computeDSSForDate，供驗證期檢驗與前瞻報酬分析共用 */
+interface DailyIndicatorRow { date: string; close: number; bias20: number | null; rsi: number | null; }
+
+const buildDailyIndicators = (kline: { date: string; close: number }[]): DailyIndicatorRow[] => {
+    const rows: DailyIndicatorRow[] = [];
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 0; i < kline.length; i++) {
+        const { date, close } = kline[i];
+        let rsi: number | null = null;
+        if (i >= 1) {
+            const diff = close - kline[i - 1].close;
+            if (i <= 14) {
+                if (diff > 0) avgGain += diff; else avgLoss += Math.abs(diff);
+                if (i === 14) {
+                    avgGain /= 14; avgLoss /= 14;
+                    rsi = 100 - 100 / (1 + avgGain / (avgLoss === 0 ? 1 : avgLoss));
+                }
+            } else {
+                avgGain = (avgGain * 13 + (diff > 0 ? diff : 0)) / 14;
+                avgLoss = (avgLoss * 13 + (diff < 0 ? Math.abs(diff) : 0)) / 14;
+                rsi = 100 - 100 / (1 + avgGain / (avgLoss === 0 ? 1 : avgLoss));
+            }
+        }
+        let bias20: number | null = null;
+        if (i >= 19) {
+            let sum = 0;
+            for (let j = i - 19; j <= i; j++) sum += kline[j].close;
+            const ma20 = sum / 20;
+            bias20 = ma20 !== 0 ? ((close - ma20) / ma20) * 100 : null;
+        }
+        rows.push({ date, close, bias20, rsi });
+    }
+    return rows;
+};
+
+/** 把原始資料快取整理成 symbol → 每日指標列；同標的有多個快取項時取 K 線最長的一份 */
+const buildSymbolIndicatorMap = (rawCache: Record<string, RawCacheEntry>): Map<string, DailyIndicatorRow[]> => {
+    const bestKline = new Map<string, { date: string; close: number }[]>();
+    Object.entries(rawCache).forEach(([key, entry]) => {
+        if (!entry?.kline?.length) return;
+        const sym = key.split('|')[0];
+        const prev = bestKline.get(sym);
+        if (!prev || entry.kline.length > prev.length) bestKline.set(sym, entry.kline);
+    });
+    const map = new Map<string, DailyIndicatorRow[]>();
+    bestKline.forEach((kline, sym) => map.set(sym, buildDailyIndicators(kline)));
+    return map;
+};
+
+/** 單一切分（訓練期或驗證期）套用「訓練期參數規則」後的檢驗結果＋標的分佈 */
+interface SplitRuleMetric {
+    nTotal: number;                 // 切分內全部交易數
+    nWithData: number;              // 有原始快取可評估的交易數
+    nWithSignal: number;            // ±N日視窗內存在「參數達標日」的交易數
+    medImprovement: number | null;  // 改善率中位數＝達標日進場的平均報酬 − 實際報酬（僅有訊號者）
+    winRate: number | null;         // 改善率 > 0 的比例（僅有訊號者）
+    distinctSymbols: number;        // 不同標的數（防偽重複檢查）
+    maxSymbolShare: number | null;  // 最大單一標的佔比 %
+    maxSymbolLabel: string | null;
+}
+
+/** 純計算式檢驗：對每筆交易在 ±WINDOW_DAYS 視窗內找達標日，模擬進/出場報酬 vs 實際報酬。
+ *  不套用參數到全域設定、不動 BacktestView */
+const evalRuleOnTrades = <T extends { symbol: string; name?: string }>(
+    trades: T[],
+    indicatorMap: Map<string, DailyIndicatorRow[]>,
+    centerDate: (t: T) => string,
+    qualifies: (d: DailyIndicatorRow) => boolean,
+    simReturn: (t: T, d: DailyIndicatorRow) => number | null,
+    actualReturn: (t: T) => number,
+    dayFilter?: (t: T, d: DailyIndicatorRow) => boolean,
+): SplitRuleMetric => {
+    const improvements: number[] = [];
+    let nWithData = 0, nWithSignal = 0;
+    for (const t of trades) {
+        const rows = indicatorMap.get(t.symbol);
+        if (!rows?.length) continue;
+        nWithData++;
+        let window = sliceAroundDate(rows, centerDate(t), WINDOW_DAYS);
+        if (dayFilter) window = window.filter(d => dayFilter(t, d));
+        const rets = window.filter(qualifies).map(d => simReturn(t, d)).filter(notNull);
+        if (!rets.length) continue;
+        nWithSignal++;
+        improvements.push(rets.reduce((s, v) => s + v, 0) / rets.length - actualReturn(t));
+    }
+    const counts = new Map<string, { n: number; label: string }>();
+    trades.forEach(t => {
+        const e = counts.get(t.symbol) ?? { n: 0, label: t.name ?? t.symbol };
+        e.n++;
+        counts.set(t.symbol, e);
+    });
+    let maxSymbolShare: number | null = null;
+    let maxSymbolLabel: string | null = null;
+    counts.forEach(e => {
+        const share = trades.length ? (e.n / trades.length) * 100 : 0;
+        if (maxSymbolShare === null || share > maxSymbolShare) { maxSymbolShare = share; maxSymbolLabel = e.label; }
+    });
+    return {
+        nTotal: trades.length,
+        nWithData,
+        nWithSignal,
+        medImprovement: median(improvements),
+        winRate: improvements.length ? (improvements.filter(v => v > 0).length / improvements.length) * 100 : null,
+        distinctSymbols: counts.size,
+        maxSymbolShare,
+        maxSymbolLabel,
+    };
+};
+
+/** 驗證期樣本 <15 筆或最大單一標的 >40% 視為樣本不足（誠實標示而非隱藏） */
+const VAL_MIN_N = 15;
+const VAL_MAX_SYMBOL_SHARE = 40;
+
+const SplitValidationCard: React.FC<{
+    title: string;
+    ruleDesc: string;
+    data: { cutoffDate: string | null; train: SplitRuleMetric; val: SplitRuleMetric } | null | undefined;
+}> = ({ title, ruleDesc, data }) => {
+    if (!data) {
+        return (
+            <div className="pt-3 border-t border-slate-700/60">
+                <div className="text-xs text-slate-500 py-2">{title}：此分類切分後樣本不足或無可用訓練期參數，無法檢驗</div>
+            </div>
+        );
+    }
+    const { train, val, cutoffDate } = data;
+    const insufficient = val.nTotal < VAL_MIN_N || (val.maxSymbolShare ?? 0) > VAL_MAX_SYMBOL_SHARE;
+    const noRawData = train.nWithData === 0 && val.nWithData === 0;
+    const MetricRow = ({ label, m }: { label: string; m: SplitRuleMetric }) => (
+        <tr className="border-t border-slate-700/40">
+            <td className="py-1.5 px-2 text-slate-300">{label}</td>
+            <td className="py-1.5 px-2 text-center font-mono text-slate-300">{m.nTotal}</td>
+            <td className="py-1.5 px-2 text-center font-mono text-slate-400">{m.nWithSignal}/{m.nWithData}</td>
+            <td className={`py-1.5 px-2 text-center font-mono font-bold ${m.medImprovement === null ? 'text-slate-500' : m.medImprovement > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                {m.medImprovement !== null ? `${m.medImprovement >= 0 ? '+' : ''}${m.medImprovement.toFixed(2)}%` : '—'}
+            </td>
+            <td className="py-1.5 px-2 text-center font-mono text-slate-300">{m.winRate !== null ? `${m.winRate.toFixed(0)}%` : '—'}</td>
+            <td className="py-1.5 px-2 text-center font-mono text-slate-300">{m.distinctSymbols}</td>
+            <td className="py-1.5 px-2 text-center font-mono text-slate-400">
+                {m.maxSymbolShare !== null ? `${m.maxSymbolShare.toFixed(0)}%（${m.maxSymbolLabel}）` : '—'}
+            </td>
+        </tr>
+    );
+    return (
+        <div className="pt-3 border-t border-slate-700/60 space-y-2">
+            <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-bold text-slate-200">{title}</h4>
+                <span className="text-xs text-slate-500">訓練期 ≤ {cutoffDate ?? '—'}，之後為驗證期 · {ruleDesc}</span>
+                {insufficient && (
+                    <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 font-bold">樣本不足，僅供參考</span>
+                )}
+            </div>
+            {noRawData ? (
+                <div className="text-xs text-slate-500 py-2">找不到原始資料快取，請重新執行「開始分析」或匯入全域數據後再看驗證結果</div>
+            ) : (
+                <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                        <thead>
+                            <tr className="text-slate-500">
+                                <th className="py-1.5 px-2 text-left">切分</th>
+                                <th className="py-1.5 px-2 text-center">交易數</th>
+                                <th className="py-1.5 px-2 text-center">有訊號/可評估</th>
+                                <th className="py-1.5 px-2 text-center">改善率中位數</th>
+                                <th className="py-1.5 px-2 text-center">勝率</th>
+                                <th className="py-1.5 px-2 text-center">不同標的數</th>
+                                <th className="py-1.5 px-2 text-center">最大單一標的佔比</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <MetricRow label="訓練期" m={train} />
+                            <MetricRow label="驗證期" m={val} />
+                        </tbody>
+                    </table>
+                </div>
+            )}
+            <p className="text-[10px] text-slate-600">
+                改善率＝視窗內「訓練期參數達標日」進出場的平均報酬 − 實際報酬（純計算檢驗，不影響全域設定）。
+                驗證期數字接近訓練期＝參數可泛化；明顯縮水＝訓練期數字高估；轉負＝擬合歷史雜訊。
+            </p>
+        </div>
+    );
 };
 
 // ── Section 4：出場分析（對稱於 ±N日最佳進場分析，改找最佳「出場」日）────────
@@ -599,24 +841,61 @@ const buildStopLossCatStats = (results: ExitWindowResult[], cat: 'ETF' | '上市
 const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({ results }) => {
     const [exitCatTab, setExitCatTab] = useState<'ETF' | '上市' | '上櫃'>('上市');
 
-    const exitCatStats = useMemo(() => {
+    /** ①③ 各分類依出場日期切訓練/驗證期（獲利/虧損交易一起切，再由 build*CatStats 內部分流） */
+    const exitSplits = useMemo(() => {
         if (!results?.length) return null;
-        const etf = buildExitCatStats(results, 'ETF');
-        const listed = buildExitCatStats(results, '上市');
-        const otc = buildExitCatStats(results, '上櫃');
+        const out = {} as Record<'ETF' | '上市' | '上櫃', DateSplit<ExitWindowResult>>;
+        (['ETF', '上市', '上櫃'] as const).forEach(cat => {
+            out[cat] = splitByDate(results.filter(r => r.category === cat), r => r.sellDate);
+        });
+        return out;
+    }, [results]);
+
+    // 中位數參數只用訓練期計算（含 KEEP_RATIO 品質篩選，防資訊洩漏）
+    const exitCatStats = useMemo(() => {
+        if (!exitSplits) return null;
+        const etf = buildExitCatStats(exitSplits.ETF.train, 'ETF');
+        const listed = buildExitCatStats(exitSplits.上市.train, '上市');
+        const otc = buildExitCatStats(exitSplits.上櫃.train, '上櫃');
         if (!etf && !listed && !otc) return null;
         return { ETF: etf, 上市: listed, 上櫃: otc };
-    }, [results]);
+    }, [exitSplits]);
 
     // STOP LOSS / FORCE STOP LOSS：僅取最終虧損的完整交易，跟 SELL/FORCE SELL（僅取獲利交易）互斥分流
     const stopLossCatStats = useMemo(() => {
-        if (!results?.length) return null;
-        const etf = buildStopLossCatStats(results, 'ETF');
-        const listed = buildStopLossCatStats(results, '上市');
-        const otc = buildStopLossCatStats(results, '上櫃');
+        if (!exitSplits) return null;
+        const etf = buildStopLossCatStats(exitSplits.ETF.train, 'ETF');
+        const listed = buildStopLossCatStats(exitSplits.上市.train, '上市');
+        const otc = buildStopLossCatStats(exitSplits.上櫃.train, '上櫃');
         if (!etf && !listed && !otc) return null;
         return { ETF: etf, 上市: listed, 上櫃: otc };
-    }, [results]);
+    }, [exitSplits]);
+
+    const indicatorMap = useMemo(() => results?.length ? buildSymbolIndicatorMap(loadDSSLabRawCache()) : null, [results]);
+
+    /** 驗證期檢驗（SELL 停利）：以訓練期停利中位數（Bias20 ≥ 門檻）當出場規則，僅套用在獲利交易上。
+     *  出場日不得早於買進日（與出場分析視窗規則一致）；停損側樣本少，暫不做切分檢驗 */
+    const exitValidation = useMemo(() => {
+        if (!exitSplits || !indicatorMap || !exitCatStats) return null;
+        const out = {} as Record<'ETF' | '上市' | '上櫃', { cutoffDate: string | null; train: SplitRuleMetric; val: SplitRuleMetric } | null>;
+        (['ETF', '上市', '上櫃'] as const).forEach(cat => {
+            const stats = exitCatStats[cat];
+            const split = exitSplits[cat];
+            const trainWinners = split.train.filter(r => r.isWinner);
+            const valWinners = split.val.filter(r => r.isWinner);
+            if (!stats || stats.medBias20 === null || !valWinners.length) { out[cat] = null; return; }
+            const qualifies = (d: DailyIndicatorRow) => d.bias20 !== null && d.bias20 >= stats.medBias20!;
+            const simReturn = (t: ExitWindowResult, d: DailyIndicatorRow) =>
+                t.buyPrice > 0 ? ((d.close - t.buyPrice) / t.buyPrice) * 100 : null;
+            const dayFilter = (t: ExitWindowResult, d: DailyIndicatorRow) => d.date >= t.buyDate;
+            out[cat] = {
+                cutoffDate: split.cutoffDate,
+                train: evalRuleOnTrades(trainWinners, indicatorMap, t => t.sellDate, qualifies, simReturn, t => t.actualReturn, dayFilter),
+                val: evalRuleOnTrades(valWinners, indicatorMap, t => t.sellDate, qualifies, simReturn, t => t.actualReturn, dayFilter),
+            };
+        });
+        return out;
+    }, [exitSplits, indicatorMap, exitCatStats]);
 
     const avgImprovement = results?.length ? avg(results.map(r => r.improvement)) : null;
     const couldImprove = results?.filter(r => r.improvement > 0.5).length ?? 0;
@@ -745,8 +1024,8 @@ const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({
                         {(exitCatStats || stopLossCatStats) && (
                             <div className="pt-4 border-t border-slate-700 space-y-3">
                                 <div className="flex items-center gap-2">
-                                    <h4 className="text-sm font-bold text-slate-200">最佳出場點參數中位數</h4>
-                                    <span className="text-xs text-slate-500">依分類彙總 — 供停利/停損門檻參考</span>
+                                    <h4 className="text-sm font-bold text-slate-200">最佳出場點參數中位數（訓練期參數）</h4>
+                                    <span className="text-xs text-slate-500">各分類依出場日期前 {Math.round(TRAIN_RATIO * 100)}% 為訓練期計算，後 {Math.round((1 - TRAIN_RATIO) * 100)}% 留作驗證期檢驗</span>
                                 </div>
                                 <div className="flex gap-1">
                                     {(['ETF', '上市', '上櫃'] as const).map(tab => {
@@ -772,7 +1051,7 @@ const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({
                                 {exitCatStats?.[exitCatTab] ? (
                                     <>
                                     <div className="text-xs text-slate-500">
-                                        SELL（停利，僅取最終獲利交易）· 優質數據篩選：改善幅度前 70%（{exitCatStats[exitCatTab]!.rawN} 筆中保留 {exitCatStats[exitCatTab]!.n} 筆，門檻 ≥ {exitCatStats[exitCatTab]!.qualityCutoff.toFixed(1)}%）
+                                        SELL（停利，僅取最終獲利交易）· 優質數據篩選：改善幅度前 70%（訓練期 {exitCatStats[exitCatTab]!.rawN} 筆中保留 {exitCatStats[exitCatTab]!.n} 筆，門檻 ≥ {exitCatStats[exitCatTab]!.qualityCutoff.toFixed(1)}%）
                                     </div>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                         <StatCard label="RSI 中位數" value={exitCatStats[exitCatTab]!.medRsi?.toFixed(1) ?? '-'} color="text-amber-300" />
@@ -792,8 +1071,13 @@ const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({
                                     </div>
                                     </>
                                 ) : (
-                                    <div className="text-xs text-slate-500 py-4 text-center">此類別獲利交易資料不足（上市/上櫃需 ≥3 筆，ETF 需 ≥1 筆）</div>
+                                    <div className="text-xs text-slate-500 py-4 text-center">此類別訓練期獲利交易資料不足（上市/上櫃需 ≥3 筆，ETF 需 ≥1 筆）</div>
                                 )}
+                                <SplitValidationCard
+                                    title="驗證期檢驗（SELL 停利）"
+                                    ruleDesc={`規則：Bias20 ≥ ${exitCatStats?.[exitCatTab]?.medBias20?.toFixed(1) ?? '—'}%（訓練期中位數，僅獲利交易）`}
+                                    data={exitValidation?.[exitCatTab]}
+                                />
                                 {stopLossCatStats && (
                                     <div className="pt-3 border-t border-slate-700/60 space-y-3">
                                         <div className="flex items-center gap-2">
@@ -803,7 +1087,7 @@ const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({
                                         {stopLossCatStats[exitCatTab] ? (
                                             <>
                                             <div className="text-xs text-slate-500">
-                                                STOP LOSS（找損失最小的停損點）· 優質數據篩選：改善幅度前 70%（{stopLossCatStats[exitCatTab]!.rawN} 筆中保留 {stopLossCatStats[exitCatTab]!.n} 筆，門檻 ≥ {stopLossCatStats[exitCatTab]!.qualityCutoff.toFixed(1)}%）
+                                                STOP LOSS（找損失最小的停損點）· 優質數據篩選：改善幅度前 70%（訓練期 {stopLossCatStats[exitCatTab]!.rawN} 筆中保留 {stopLossCatStats[exitCatTab]!.n} 筆，門檻 ≥ {stopLossCatStats[exitCatTab]!.qualityCutoff.toFixed(1)}%）· 虧損樣本較少，暫不做切分驗證
                                                 {exitCatTab === 'ETF' && <span className="text-slate-600">（ETF 無停損機制，此數值僅供參考）</span>}
                                             </div>
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1133,6 +1417,233 @@ const DivergenceAnalysisSection: React.FC<{
     );
 };
 
+// ── 第一階段②：條件式前瞻報酬分析 ─────────────────────────────────────────
+// 驗證性分析：問「Bias20 達到某區間之後的 N 天發生了什麼」，而非「已知最低點那天指標是什麼」，
+// 與上方描述性反推互補。資料源＝ft_dsslab_raw_cache 既有 K 線（方案 A，零 FinMind 呼叫），
+// 架構上資料源可替換，額度充足時可切換成完整 3 年日線（方案 B）。
+const BIAS_BUCKETS: { label: string; test: (b: number) => boolean }[] = [
+    { label: 'Bias20 > 0%', test: b => b > 0 },
+    { label: '0 ~ -4%', test: b => b <= 0 && b > -4 },
+    { label: '-4 ~ -7%', test: b => b <= -4 && b > -7 },
+    { label: '-7 ~ -10%', test: b => b <= -7 && b > -10 },
+    { label: '≤ -10%', test: b => b <= -10 },
+];
+const FORWARD_NS = [5, 10, 20];
+const RSI_SPLIT_THRESHOLD = 45;
+/** 桶內樣本數低於此值標灰（不具統計參考性） */
+const MIN_BUCKET_N = 30;
+
+interface ForwardCell { n: number; medRet: number | null; winRate: number | null; }
+const buildForwardCell = (rets: number[]): ForwardCell => ({
+    n: rets.length,
+    medRet: median(rets),
+    winRate: rets.length ? (rets.filter(v => v > 0).length / rets.length) * 100 : null,
+});
+
+interface ForwardCatData {
+    dayCount: number;
+    symbolCount: number;
+    baseline: ForwardCell[];                    // 該分類全部日子，依 N
+    buckets: ForwardCell[][];                   // [桶][N]
+    rsiBuckets: [ForwardCell, ForwardCell][][]; // [桶][N][RSI<45, RSI≥45]
+}
+
+const buildForwardReturnData = (
+    indicatorMap: Map<string, DailyIndicatorRow[]>,
+    catBySymbol: Map<string, 'ETF' | '上市' | '上櫃'>
+): Record<'ETF' | '上市' | '上櫃', ForwardCatData> => {
+    const mkAcc = () => ({
+        days: 0,
+        symbols: new Set<string>(),
+        base: FORWARD_NS.map(() => [] as number[]),
+        bkt: BIAS_BUCKETS.map(() => FORWARD_NS.map(() => [] as number[])),
+        rsiBkt: BIAS_BUCKETS.map(() => FORWARD_NS.map(() => [[], []] as [number[], number[]])),
+    });
+    const acc = { ETF: mkAcc(), 上市: mkAcc(), 上櫃: mkAcc() };
+    indicatorMap.forEach((rows, symbol) => {
+        const cat = catBySymbol.get(symbol);
+        if (!cat) return;
+        const a = acc[cat];
+        let counted = false;
+        for (let i = 0; i < rows.length; i++) {
+            const b = rows[i].bias20;
+            if (b === null || rows[i].close <= 0) continue;
+            const bucketIdx = BIAS_BUCKETS.findIndex(bk => bk.test(b));
+            if (bucketIdx === -1) continue;
+            let anyN = false;
+            FORWARD_NS.forEach((N, ni) => {
+                const fwd = rows[i + N];
+                if (!fwd) return;
+                const ret = ((fwd.close - rows[i].close) / rows[i].close) * 100;
+                a.base[ni].push(ret);
+                a.bkt[bucketIdx][ni].push(ret);
+                const rsi = rows[i].rsi;
+                if (rsi !== null) a.rsiBkt[bucketIdx][ni][rsi < RSI_SPLIT_THRESHOLD ? 0 : 1].push(ret);
+                anyN = true;
+            });
+            if (anyN) { a.days++; counted = true; }
+        }
+        if (counted) a.symbols.add(symbol);
+    });
+    const finalize = (a: ReturnType<typeof mkAcc>): ForwardCatData => ({
+        dayCount: a.days,
+        symbolCount: a.symbols.size,
+        baseline: a.base.map(buildForwardCell),
+        buckets: a.bkt.map(row => row.map(buildForwardCell)),
+        rsiBuckets: a.rsiBkt.map(row => row.map(pair => [buildForwardCell(pair[0]), buildForwardCell(pair[1])] as [ForwardCell, ForwardCell])),
+    });
+    return { ETF: finalize(acc.ETF), 上市: finalize(acc.上市), 上櫃: finalize(acc.上櫃) };
+};
+
+const ForwardCellView: React.FC<{ c: ForwardCell; base?: ForwardCell }> = ({ c, base }) => {
+    const grey = c.n < MIN_BUCKET_N;
+    const diff = base && c.medRet !== null && base.medRet !== null ? c.medRet - base.medRet : null;
+    return (
+        <div className={grey ? 'opacity-40' : ''}>
+            <div className={`font-mono text-sm font-bold ${c.medRet === null ? 'text-slate-500' : c.medRet >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                {c.medRet !== null ? `${c.medRet >= 0 ? '+' : ''}${c.medRet.toFixed(2)}%` : '—'}
+            </div>
+            <div className="text-[10px] text-slate-500">勝率 {c.winRate !== null ? `${c.winRate.toFixed(0)}%` : '—'} · n={c.n}</div>
+            {diff !== null && (
+                <div className={`text-[10px] font-mono ${diff >= 0 ? 'text-red-400/70' : 'text-emerald-400/70'}`}>
+                    vs 基準 {diff >= 0 ? '+' : ''}{diff.toFixed(2)}%
+                </div>
+            )}
+        </div>
+    );
+};
+
+const ForwardReturnSection: React.FC<{ completedTrades: CompletedTrade[] }> = ({ completedTrades }) => {
+    const [forwardCatTab, setForwardCatTab] = useState<'ETF' | '上市' | '上櫃'>('上市');
+
+    const data = useMemo(() => {
+        const catBySymbol = new Map<string, 'ETF' | '上市' | '上櫃'>();
+        completedTrades.forEach(t => catBySymbol.set(t.symbol, t.category));
+        return buildForwardReturnData(buildSymbolIndicatorMap(loadDSSLabRawCache()), catBySymbol);
+    }, [completedTrades]);
+
+    const hasAnyData = (['ETF', '上市', '上櫃'] as const).some(cat => data[cat].dayCount > 0);
+    const d = data[forwardCatTab];
+
+    return (
+        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-700 flex items-center gap-2 flex-wrap">
+                <TrendingUp size={16} className="text-sky-400" />
+                <h3 className="text-sm font-bold text-slate-200">條件式前瞻報酬分析</h3>
+                <span className="text-xs text-slate-500 ml-1">Bias20 達到某區間之後的 N 個交易日，實際發生了什麼？</span>
+            </div>
+            <div className="p-4 space-y-4">
+                {!hasAnyData ? (
+                    <div className="text-center py-12 text-slate-500 text-sm">
+                        尚無原始資料快取 — 請先執行上方「開始分析」或匯入全域數據
+                    </div>
+                ) : (
+                    <>
+                        <div className="text-xs text-amber-300/80 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
+                            選樣偏誤提醒：資料源為既有原始資料快取，僅涵蓋「歷史交易日附近時段＋前置緩衝」，非完整市場歷史。
+                            結論僅適用於類似的時段分佈；FinMind 額度充足時可改抓完整 3 年日線再驗證一次。
+                        </div>
+                        <div className="flex gap-1">
+                            {(['ETF', '上市', '上櫃'] as const).map(tab => {
+                                const disabled = data[tab].dayCount === 0;
+                                return (
+                                    <button key={tab} onClick={() => !disabled && setForwardCatTab(tab)} disabled={disabled}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                            forwardCatTab === tab && !disabled
+                                                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                                                : disabled
+                                                    ? 'text-slate-600 cursor-not-allowed'
+                                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'
+                                        }`}>
+                                        {tab}
+                                        <span className="ml-1 text-slate-500">({data[tab].symbolCount} 檔 / {data[tab].dayCount} 日)</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left">
+                                <thead>
+                                    <tr className="text-xs text-slate-400 border-b border-slate-700">
+                                        <th className="py-2 px-3">Bias20 區間</th>
+                                        {FORWARD_NS.map(N => <th key={N} className="py-2 px-3 text-center">未來 {N} 日</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {BIAS_BUCKETS.map((bk, bi) => (
+                                        <tr key={bk.label} className="border-t border-slate-700/30">
+                                            <td className="py-2 px-3 text-sm text-slate-200 font-medium">{bk.label}</td>
+                                            {FORWARD_NS.map((N, ni) => (
+                                                <td key={N} className="py-2 px-3 text-center">
+                                                    <ForwardCellView c={d.buckets[bi][ni]} base={d.baseline[ni]} />
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                    <tr className="border-t border-slate-600 bg-slate-900/40">
+                                        <td className="py-2 px-3 text-sm text-slate-400 font-medium">基準（全部日子）</td>
+                                        {FORWARD_NS.map((N, ni) => (
+                                            <td key={N} className="py-2 px-3 text-center">
+                                                <ForwardCellView c={d.baseline[ni]} />
+                                            </td>
+                                        ))}
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="pt-3 border-t border-slate-700 space-y-2">
+                            <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-slate-200">RSI 增量資訊檢驗</h4>
+                                <span className="text-xs text-slate-500">同一 Bias20 桶內，RSI &lt; {RSI_SPLIT_THRESHOLD} 是否帶來額外報酬差異？（供第二階段「RSI 增量價值」判斷）</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead>
+                                        <tr className="text-xs text-slate-400 border-b border-slate-700">
+                                            <th className="py-2 px-3">Bias20 區間</th>
+                                            <th className="py-2 px-3">RSI</th>
+                                            {FORWARD_NS.map(N => <th key={N} className="py-2 px-3 text-center">未來 {N} 日</th>)}
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {BIAS_BUCKETS.map((bk, bi) => (
+                                            <React.Fragment key={bk.label}>
+                                                {([0, 1] as const).map(ri => (
+                                                    <tr key={ri} className={`border-t ${ri === 0 ? 'border-slate-700/50' : 'border-slate-700/20'}`}>
+                                                        {ri === 0 && (
+                                                            <td rowSpan={2} className="py-2 px-3 text-sm text-slate-200 font-medium align-top">{bk.label}</td>
+                                                        )}
+                                                        <td className={`py-2 px-3 text-xs ${ri === 0 ? 'text-amber-300' : 'text-slate-400'}`}>
+                                                            {ri === 0 ? `< ${RSI_SPLIT_THRESHOLD}` : `≥ ${RSI_SPLIT_THRESHOLD}`}
+                                                        </td>
+                                                        {FORWARD_NS.map((N, ni) => (
+                                                            <td key={N} className="py-2 px-3 text-center">
+                                                                <ForwardCellView c={d.rsiBuckets[bi][ni][ri]} base={d.baseline[ni]} />
+                                                            </td>
+                                                        ))}
+                                                    </tr>
+                                                ))}
+                                            </React.Fragment>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <p className="text-[10px] text-slate-600 leading-relaxed">
+                            解讀：報酬隨 Bias20 越深單調遞增 → 假設成立，可用資料驅動門檻；各桶差不多 → Bias20 無預測力；
+                            深跌桶反而更差（非單調）→ 深跌有其理由，門檻應設下限；只有特定 N 有差 → 有效持有期存在。
+                            n &lt; {MIN_BUCKET_N} 的桶已淡化，不具統計參考性。此分析為驗證性（指標達標 → 之後如何），與描述性反推（最低點 → 回看指標）並存互補。
+                        </p>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};
+
 export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
     const [nameMap, setNameMap] = useState<Map<string, string>>(new Map());
 
@@ -1149,7 +1660,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
     const [sortKey, setSortKey] = useState<SortKey>('trades');
     const [sortAsc, setSortAsc] = useState(false);
     const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
-    const [activeSection, setActiveSection] = useState<'winrate' | 'optimal' | 'exit' | 'divergence' | 'backtest'>('winrate');
+    const [activeSection, setActiveSection] = useState<'winrate' | 'optimal' | 'exit' | 'divergence' | 'forward' | 'backtest'>('winrate');
 
     const OPTIMAL_CACHE_KEY = 'ft_dsslab_optimal_cache';
     const EXIT_CACHE_KEY = 'ft_dsslab_exit_cache';
@@ -1371,9 +1882,12 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
         const round2 = (v: number | null | undefined): number | undefined => v == null ? undefined : Math.round(v * 100) / 100;
         const cats: DSSProfile['categories'] = {};
         (['ETF', '上市', '上櫃'] as const).forEach(cat => {
-            const entryStats = optimalResults?.length ? buildOptimalCatStats(optimalResults, cat) : null;
-            const exitStats = exitResults?.length ? buildExitCatStats(exitResults, cat) : null;
-            const stopLossStats = exitResults?.length ? buildStopLossCatStats(exitResults, cat) : null;
+            // 與畫面上的「訓練期參數」一致：只用日期前 70% 的訓練期交易計算，避免存下同資料驗證的過擬合參數
+            const entryTrain = optimalResults?.length ? splitByDate(optimalResults.filter(r => r.category === cat), r => r.buyDate).train : null;
+            const exitTrain = exitResults?.length ? splitByDate(exitResults.filter(r => r.category === cat), r => r.sellDate).train : null;
+            const entryStats = entryTrain?.length ? buildOptimalCatStats(entryTrain, cat) : null;
+            const exitStats = exitTrain?.length ? buildExitCatStats(exitTrain, cat) : null;
+            const stopLossStats = exitTrain?.length ? buildStopLossCatStats(exitTrain, cat) : null;
             if (!entryStats && !exitStats && !stopLossStats) return;
             cats[cat] = {
                 rsi: round2(entryStats?.medRsi) ?? 0,
@@ -1491,6 +2005,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                     { key: 'optimal', label: '±N日最佳進場分析', icon: Zap },
                     { key: 'exit', label: '出場分析', icon: Target },
                     { key: 'divergence', label: '背離分析', icon: BarChart2 },
+                    { key: 'forward', label: '前瞻報酬', icon: TrendingUp },
                     { key: 'backtest', label: 'DSS 回測分析', icon: History },
                 ] as const).map(({ key, label, icon: Icon }) => (
                     <button key={key} onClick={() => setActiveSection(key)}
@@ -1674,6 +2189,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                     {activeSection === 'optimal' && <OptimalEntrySection results={optimalResults} />}
                     {activeSection === 'exit' && <ExitAnalysisSection results={exitResults} />}
                     {activeSection === 'divergence' && <DivergenceAnalysisSection completedTrades={allCompleted} optimalResults={optimalResults} exitResults={exitResults} />}
+                    {activeSection === 'forward' && <ForwardReturnSection completedTrades={allCompleted} />}
                 </>
             )}
         </div>

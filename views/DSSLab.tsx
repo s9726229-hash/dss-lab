@@ -1513,7 +1513,11 @@ const ForwardCellView: React.FC<{ c: ForwardCell; base?: ForwardCell }> = ({ c, 
     );
 };
 
-const ForwardReturnSection: React.FC<{ completedTrades: CompletedTrade[] }> = ({ completedTrades }) => {
+const ForwardReturnSection: React.FC<{
+    completedTrades: CompletedTrade[];
+    optimalCatStats: Record<'ETF' | '上市' | '上櫃', OptimalCatStats | null> | null;
+    exitCatStats: Record<'ETF' | '上市' | '上櫃', ExitCatStats | null> | null;
+}> = ({ completedTrades, optimalCatStats, exitCatStats }) => {
     const [forwardCatTab, setForwardCatTab] = useState<'ETF' | '上市' | '上櫃'>('上市');
 
     const data = useMemo(() => {
@@ -1637,6 +1641,82 @@ const ForwardReturnSection: React.FC<{ completedTrades: CompletedTrade[] }> = ({
                             深跌桶反而更差（非單調）→ 深跌有其理由，門檻應設下限；只有特定 N 有差 → 有效持有期存在。
                             n &lt; {MIN_BUCKET_N} 的桶已淡化，不具統計參考性。此分析為驗證性（指標達標 → 之後如何），與描述性反推（最低點 → 回看指標）並存互補。
                         </p>
+
+                        {/* 進場/出場時機比對：前瞻報酬 vs 實際交易門檻 */}
+                        {(optimalCatStats || exitCatStats) && (() => {
+                            const fmtBias = (v: number | null) => v === null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+                            const bestEntryBucket = (d: ForwardCatData): { label: string; excess10: number } | null => {
+                                const base10 = d.baseline[1];
+                                if (base10.medRet === null) return null;
+                                const best = d.buckets.reduce<{ bi: number; excess: number } | null>((acc, row, bi) => {
+                                    const c = row[1];
+                                    if (c.n < MIN_BUCKET_N || c.medRet === null) return acc;
+                                    const excess = c.medRet - base10.medRet!;
+                                    return !acc || excess > acc.excess ? { bi, excess } : acc;
+                                }, null);
+                                return best ? { label: BIAS_BUCKETS[best.bi].label, excess10: best.excess } : null;
+                            };
+                            const entryAssess = (threshold: number | null, bestLabel: string | null): string => {
+                                if (threshold === null) return '—';
+                                if (threshold > 0) return '門檻在正乖離，比最佳桶早很多 ⚠️';
+                                if (threshold > -4) return '門檻在 0~-4%，仍早於最佳桶 ⚠️';
+                                if (threshold > -7) return '門檻已進入有效區間 ✅';
+                                return '門檻在最佳桶內 ✅';
+                            };
+                            const exitAssess = (threshold: number | null): string => {
+                                if (threshold === null) return '—';
+                                if (threshold >= 15) return '高乖離出場，有效等待獲利 ✅';
+                                if (threshold >= 5) return '中等乖離出場，尚可 △';
+                                return '低乖離出場，可能過早 ⚠️';
+                            };
+                            return (
+                                <div className="mt-4 space-y-3">
+                                    <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                                        <BarChart2 size={14} className="text-violet-400" />
+                                        進場／出場時機比對（前瞻報酬 vs 實際交易門檻）
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs">
+                                            <thead>
+                                                <tr className="text-[10px] text-slate-500 border-b border-slate-700">
+                                                    <th className="py-1.5 px-2">分類</th>
+                                                    <th className="py-1.5 px-2">前瞻最佳進場桶<br/><span className="font-normal">10日超額最高</span></th>
+                                                    <th className="py-1.5 px-2">實際進場門檻<br/><span className="font-normal">訓練期 Bias20 中位數</span></th>
+                                                    <th className="py-1.5 px-2">進場評估</th>
+                                                    <th className="py-1.5 px-2 border-l border-slate-700">實際出場門檻<br/><span className="font-normal">訓練期 Bias20 中位數</span></th>
+                                                    <th className="py-1.5 px-2">出場評估</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {(['ETF', '上市', '上櫃'] as const).map(cat => {
+                                                    const d = data[cat];
+                                                    if (d.dayCount === 0) return null;
+                                                    const best = bestEntryBucket(d);
+                                                    const entryB20 = optimalCatStats?.[cat]?.medBias20 ?? null;
+                                                    const exitB20 = exitCatStats?.[cat]?.medBias20 ?? null;
+                                                    return (
+                                                        <tr key={cat} className="border-t border-slate-700/40">
+                                                            <td className="py-2 px-2 font-medium text-slate-300">{cat}</td>
+                                                            <td className="py-2 px-2">
+                                                                {best ? (
+                                                                    <><span className="text-slate-200">{best.label}</span><br/>
+                                                                    <span className="text-emerald-400 font-mono">超額 +{best.excess10.toFixed(1)}%</span></>
+                                                                ) : <span className="text-slate-600">資料不足</span>}
+                                                            </td>
+                                                            <td className="py-2 px-2 font-mono text-slate-200">{fmtBias(entryB20)}</td>
+                                                            <td className="py-2 px-2 text-slate-400">{entryAssess(entryB20, best?.label ?? null)}</td>
+                                                            <td className="py-2 px-2 border-l border-slate-700 font-mono text-slate-200">{fmtBias(exitB20)}</td>
+                                                            <td className="py-2 px-2 text-slate-400">{exitAssess(exitB20)}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <p className="text-[10px] text-slate-600">進場評估依據：前瞻報酬矩陣中超額報酬最高的 Bias20 桶（10日，n≥{MIN_BUCKET_N}）。出場評估依據：停利門檻越高代表更完整地等待漲幅。</p>
+                                </div>
+                            );
+                        })()}
                     </>
                 )}
             </div>
@@ -1673,6 +1753,26 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
     const [savedProfileMsg, setSavedProfileMsg] = useState('');
 
     const allCompleted = useMemo(() => buildCompletedTrades(stockTransactions), [stockTransactions]);
+
+    const parentOptimalCatStats = useMemo(() => {
+        if (!optimalResults?.length) return null;
+        const out = {} as Record<'ETF' | '上市' | '上櫃', OptimalCatStats | null>;
+        (['ETF', '上市', '上櫃'] as const).forEach(cat => {
+            const train = splitByDate(optimalResults.filter(r => r.category === cat), r => r.buyDate).train;
+            out[cat] = train.length ? buildOptimalCatStats(train, cat) : null;
+        });
+        return out;
+    }, [optimalResults]);
+
+    const parentExitCatStats = useMemo(() => {
+        if (!exitResults?.length) return null;
+        const out = {} as Record<'ETF' | '上市' | '上櫃', ExitCatStats | null>;
+        (['ETF', '上市', '上櫃'] as const).forEach(cat => {
+            const train = splitByDate(exitResults.filter(r => r.category === cat), r => r.sellDate).train;
+            out[cat] = train.length ? buildExitCatStats(train, cat) : null;
+        });
+        return out;
+    }, [exitResults]);
 
     const filteredTrades = useMemo(() =>
         categoryFilter === 'ALL' ? allCompleted : allCompleted.filter(t => t.category === categoryFilter),
@@ -2189,7 +2289,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                     {activeSection === 'optimal' && <OptimalEntrySection results={optimalResults} />}
                     {activeSection === 'exit' && <ExitAnalysisSection results={exitResults} />}
                     {activeSection === 'divergence' && <DivergenceAnalysisSection completedTrades={allCompleted} optimalResults={optimalResults} exitResults={exitResults} />}
-                    {activeSection === 'forward' && <ForwardReturnSection completedTrades={allCompleted} />}
+                    {activeSection === 'forward' && <ForwardReturnSection completedTrades={allCompleted} optimalCatStats={parentOptimalCatStats} exitCatStats={parentExitCatStats} />}
                 </>
             )}
         </div>

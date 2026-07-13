@@ -164,9 +164,9 @@ const DSSLabParamGuide: React.FC = () => (
                         <b className="text-slate-300">⑤ 斜率確認棒數（已完成，2026-07-13）</b><br />
                         比較 20MA 連升 0/1/≥2 天報酬差異。<b className="text-red-300">ETF 三組差距 &lt;3pp、完全無鑑別力</b>；上市斜率=1天略優但≥2天反而最差；上櫃方向不一致。<b className="text-red-300">整體建議移除斜率條件</b>。
                     </div>
-                    <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-600/30 opacity-60">
-                        <b className="text-slate-400">⑥ 籌碼覆寫規則（待 FinMind 額度）</b><br />
-                        驗證「法人棄守後 N 天實際跌幅」是否支撐現有籌碼覆寫規則設計前提。
+                    <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                        <b className="text-slate-300">⑥ 籌碼覆寫規則增量分析（已完成，2026-07-14）</b><br />
+                        依進場時外資連買／投信連買／融資連增天數分桶，比較各組報酬中位數與勝率。<b className="text-red-300">共振升級（外資+投信連買）跨類別方向不一致，無穩健支撐</b>（上櫃外資連買≥3天反而低於0天5.6pp）；<b className="text-amber-400">融資連增背離降級有一定效果</b>，上市勝率在融資連增≥3天時從82%降至56%（-26pp），ETF報酬也降約9pp，但上櫃方向不一致。建議上市保留融資連增降級規則，共振升級規則效果存疑可考慮降低門檻。
                     </div>
                     <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-600/30 opacity-60">
                         <b className="text-slate-400">第三階段（未開始）</b><br />

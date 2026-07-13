@@ -217,6 +217,14 @@ const ParamDiagnosisSummary: React.FC<{ optimalResults: WindowResult[] | null }>
             medReturn: median(trades.map(t => t.actualReturn)),
             winRate: trades.length ? trades.filter(t => t.actualReturn > 0).length / trades.length * 100 : null,
         });
+        const bkt = (trades: WindowResult[], get: (r: WindowResult) => number | null) => {
+            const valid = trades.filter(r => get(r) !== null);
+            return {
+                g0:   grp(valid.filter(r => get(r) === 0)),
+                g1_2: grp(valid.filter(r => { const v = get(r) as number; return v >= 1 && v <= 2; })),
+                g3p:  grp(valid.filter(r => (get(r) as number) >= 3)),
+            };
+        };
         return cats.reduce((acc, cat) => {
             const all = optimalResults.filter(r => r.category === cat);
             const withRsi = all.filter(r => r.actualRsi !== null);
@@ -231,11 +239,21 @@ const ParamDiagnosisSummary: React.FC<{ optimalResults: WindowResult[] | null }>
                     s1: grp(withSlope.filter(r => r.actualSlopeUpDays === 1)),
                     s2p: grp(withSlope.filter(r => r.actualSlopeUpDays! >= 2)),
                 },
+                chip: {
+                    foreign: bkt(all, r => r.actualForeignConsecBuy),
+                    trust:   bkt(all, r => r.actualTrustConsecBuy),
+                    margin:  bkt(all, r => r.actualMarginConsecIncrease),
+                },
             };
             return acc;
         }, {} as Record<'ETF' | '上市' | '上櫃', {
             rsi: { low: GS; high: GS };
             slope: { s0: GS; s1: GS; s2p: GS };
+            chip: {
+                foreign: { g0: GS; g1_2: GS; g3p: GS };
+                trust:   { g0: GS; g1_2: GS; g3p: GS };
+                margin:  { g0: GS; g1_2: GS; g3p: GS };
+            };
         }>);
     }, [optimalResults]);
 
@@ -350,6 +368,57 @@ const ParamDiagnosisSummary: React.FC<{ optimalResults: WindowResult[] | null }>
                 <p className="text-[11px] text-slate-600">ETF 三組報酬差距 &lt;3pp；上市/上櫃方向不一致。整體無穩健增量價值，建議移除斜率條件。</p>
             </div>
 
+            {/* ⑥ Chip */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-3">
+                <div>
+                    <span className="text-sm font-bold text-slate-300">⑥ 籌碼覆寫規則增量分析</span>
+                    <span className="ml-2 text-[11px] text-slate-500">進場時外資/投信連買天數、融資連增天數 vs 實際報酬</span>
+                </div>
+                {(['foreign', 'trust', 'margin'] as const).map(dim => {
+                    const labels = { foreign: '外資連買天數（共振）', trust: '投信連買天數（共振）', margin: '融資連增天數（背離）' };
+                    const CCell = ({ gs }: { gs: typeof stats[typeof cats[0]]['chip']['foreign']['g0'] }) => (<>
+                        <td className="py-2 px-3 text-center text-slate-400">{gs.n}</td>
+                        <td className={`py-2 px-3 text-center font-mono ${gs.n < 5 ? 'text-slate-600' : gs.medReturn === null ? 'text-slate-600' : gs.medReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                            {gs.n < 5 ? '(n<5)' : gs.medReturn !== null ? `${gs.medReturn >= 0 ? '+' : ''}${gs.medReturn.toFixed(1)}%` : '—'}
+                        </td>
+                        <td className="py-2 px-3 text-center text-slate-400">{gs.n < 5 ? '—' : gs.winRate !== null ? `${gs.winRate.toFixed(0)}%` : '—'}</td>
+                    </>);
+                    return (
+                        <div key={dim} className="overflow-x-auto">
+                            <div className="text-[11px] text-slate-500 mb-1">{labels[dim]}</div>
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-slate-600 border-b border-slate-700">
+                                        <th className="pb-1.5 px-3 text-left">類別</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>0 天</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>1–2 天</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>≥ 3 天</th>
+                                    </tr>
+                                    <tr className="text-slate-700 border-b border-slate-700/40 text-[10px]">
+                                        <th className="pb-1 px-3"></th>
+                                        {['n','報酬','勝率','n','報酬','勝率','n','報酬','勝率'].map((h,i) => <th key={i} className="pb-1 px-3 text-center">{h}</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {cats.map(cat => {
+                                        const d = stats[cat].chip[dim];
+                                        return (
+                                            <tr key={cat} className="border-t border-slate-700/40">
+                                                <td className="py-2 px-3 font-semibold text-slate-300">{cat}</td>
+                                                <CCell gs={d.g0} />
+                                                <CCell gs={d.g1_2} />
+                                                <CCell gs={d.g3p} />
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    );
+                })}
+                <p className="text-[11px] text-slate-600">外資/投信連買≥3天組報酬若明顯高於0天組 → 共振升級有效；融資連增≥3天組報酬若偏低 → 背離降級有效。</p>
+            </div>
+
             {/* 綜合建議 */}
             <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-3">
                 <span className="text-sm font-bold text-slate-300">綜合建議</span>
@@ -380,7 +449,7 @@ const ParamDiagnosisSummary: React.FC<{ optimalResults: WindowResult[] | null }>
                     </tbody>
                 </table>
                 <p className="text-[11px] text-slate-600 border-t border-slate-700/40 pt-2">
-                    樣本集中少數標的（華邦電 18 筆、元大高股息 18 筆等），有效資訊量低於表面筆數；建議作為「調整方向」而非硬性決策依據。⑥ 籌碼覆寫規則待 FinMind 額度充足後執行。
+                    樣本集中少數標的（華邦電 18 筆、元大高股息 18 筆等），有效資訊量低於表面筆數；建議作為「調整方向」而非硬性決策依據。⑥ 籌碼覆寫規則結果見上方⑥分析卡。
                 </p>
             </div>
         </div>
@@ -478,6 +547,38 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
         }, {} as Record<'ETF' | '上市' | '上櫃', {
             all: { s0: GS; s1: GS; s2p: GS };
             negBias: { s0: GS; s1: GS; s2p: GS };
+        }>);
+    }, [results]);
+
+    /** 第二階段⑥：籌碼覆寫規則增量驗證 — 外資/投信連買天數、融資連增天數 vs 實際報酬 */
+    const chipIncremental = useMemo(() => {
+        if (!results?.length) return null;
+        type GS = { n: number; medReturn: number | null; winRate: number | null };
+        const grp = (trades: WindowResult[]): GS => ({
+            n: trades.length,
+            medReturn: median(trades.map(t => t.actualReturn)),
+            winRate: trades.length ? trades.filter(t => t.actualReturn > 0).length / trades.length * 100 : null,
+        });
+        const bkt = (trades: WindowResult[], get: (r: WindowResult) => number | null) => {
+            const valid = trades.filter(r => get(r) !== null);
+            return {
+                g0:   grp(valid.filter(r => get(r) === 0)),
+                g1_2: grp(valid.filter(r => { const v = get(r) as number; return v >= 1 && v <= 2; })),
+                g3p:  grp(valid.filter(r => (get(r) as number) >= 3)),
+            };
+        };
+        return (['ETF', '上市', '上櫃'] as const).reduce((acc, cat) => {
+            const all = results.filter(r => r.category === cat);
+            acc[cat] = {
+                foreign: bkt(all, r => r.actualForeignConsecBuy),
+                trust:   bkt(all, r => r.actualTrustConsecBuy),
+                margin:  bkt(all, r => r.actualMarginConsecIncrease),
+            };
+            return acc;
+        }, {} as Record<'ETF' | '上市' | '上櫃', {
+            foreign: { g0: GS; g1_2: GS; g3p: GS };
+            trust:   { g0: GS; g1_2: GS; g3p: GS };
+            margin:  { g0: GS; g1_2: GS; g3p: GS };
         }>);
     }, [results]);
 
@@ -763,6 +864,60 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                             </div>
                                             <p className="text-[10px] text-slate-600 leading-relaxed">
                                                 若各組報酬差異不明顯 → 斜率連升天數條件無增量價值，可考慮移除或降低門檻。
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
+                                {chipIncremental?.[optimalCatTab] && (() => {
+                                    const d = chipIncremental[optimalCatTab];
+                                    type GS = { n: number; medReturn: number | null; winRate: number | null };
+                                    const fmtRet = (v: number | null) => v === null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+                                    const ChipRow = ({ label, gs }: { label: string; gs: GS }) => (
+                                        <tr className="border-t border-slate-700/40">
+                                            <td className="py-1.5 px-2 text-xs text-slate-400">{label}</td>
+                                            <td className="py-1.5 px-2 text-xs text-center text-slate-400">{gs.n}</td>
+                                            <td className={`py-1.5 px-2 text-xs text-center font-mono ${gs.n < 5 ? 'text-slate-600' : gs.medReturn === null ? 'text-slate-600' : gs.medReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                {gs.n < 5 ? '(n<5)' : fmtRet(gs.medReturn)}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-xs text-center text-slate-400">
+                                                {gs.n < 5 ? '—' : gs.winRate !== null ? `${gs.winRate.toFixed(0)}%` : '—'}
+                                            </td>
+                                        </tr>
+                                    );
+                                    return (
+                                        <div className="mt-3 border border-slate-700/60 rounded-xl p-4 space-y-3">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-xs font-semibold text-slate-300">籌碼覆寫規則增量分析（第二階段⑥）</span>
+                                                <span className="text-[10px] text-slate-500">進場時外資/投信連買天數、融資連增天數 vs 實際報酬</span>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                {([
+                                                    { title: '外資連買天數（共振）', sub: d.foreign },
+                                                    { title: '投信連買天數（共振）', sub: d.trust },
+                                                    { title: '融資連增天數（背離）', sub: d.margin },
+                                                ] as const).map(({ title, sub }) => (
+                                                    <div key={title}>
+                                                        <div className="text-[10px] text-slate-500 mb-1">{title}</div>
+                                                        <table className="w-full text-left">
+                                                            <thead>
+                                                                <tr className="text-[10px] text-slate-600 border-b border-slate-700">
+                                                                    <th className="pb-1 px-2">天數</th>
+                                                                    <th className="pb-1 px-2 text-center">筆數</th>
+                                                                    <th className="pb-1 px-2 text-center">報酬中位數</th>
+                                                                    <th className="pb-1 px-2 text-center">勝率</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <ChipRow label="0 天" gs={sub.g0} />
+                                                                <ChipRow label="1–2 天" gs={sub.g1_2} />
+                                                                <ChipRow label="≥ 3 天" gs={sub.g3p} />
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="text-[10px] text-slate-600 leading-relaxed">
+                                                外資/投信連買≥3天組報酬明顯高於0天組 → 共振升級有效；融資連增≥3天組報酬明顯低於0天組 → 背離降級有效。
                                             </p>
                                         </div>
                                     );

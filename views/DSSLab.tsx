@@ -253,6 +253,29 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
         return out;
     }, [entrySplits, indicatorMap, optimalCatStats]);
 
+    /** 第二階段④：RSI 增量價值 — 進場時 RSI<45 vs RSI≥45 的實際報酬比較 */
+    const rsiIncremental = useMemo(() => {
+        if (!results?.length) return null;
+        type GS = { n: number; medReturn: number | null; winRate: number | null };
+        const grp = (trades: WindowResult[]): GS => ({
+            n: trades.length,
+            medReturn: median(trades.map(t => t.actualReturn)),
+            winRate: trades.length ? trades.filter(t => t.actualReturn > 0).length / trades.length * 100 : null,
+        });
+        return (['ETF', '上市', '上櫃'] as const).reduce((acc, cat) => {
+            const all = results.filter(r => r.category === cat && r.actualRsi !== null);
+            const negBias = all.filter(r => (r.actualBias20 ?? 1) < 0);
+            acc[cat] = {
+                all: { low: grp(all.filter(r => r.actualRsi! < 45)), high: grp(all.filter(r => r.actualRsi! >= 45)) },
+                negBias: { low: grp(negBias.filter(r => r.actualRsi! < 45)), high: grp(negBias.filter(r => r.actualRsi! >= 45)) },
+            };
+            return acc;
+        }, {} as Record<'ETF' | '上市' | '上櫃', {
+            all: { low: GS; high: GS };
+            negBias: { low: GS; high: GS };
+        }>);
+    }, [results]);
+
     const avgImprovement = results?.length ? avg(results.map(r => r.improvement)) : null;
     const couldImprove = results?.filter(r => r.improvement > 0.5).length ?? 0;
     const losers = results?.filter(r => r.actualReturn < 0) ?? [];
@@ -434,6 +457,58 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                     ruleDesc={`規則：Bias20 ≤ ${optimalCatStats[optimalCatTab]?.medBias20?.toFixed(1) ?? '—'}% 且 RSI < ${optimalCatStats[optimalCatTab]?.medRsi?.toFixed(1) ?? '—'}（訓練期中位數）`}
                                     data={entryValidation?.[optimalCatTab]}
                                 />
+                                {rsiIncremental?.[optimalCatTab] && (() => {
+                                    const d = rsiIncremental[optimalCatTab];
+                                    type GS = { n: number; medReturn: number | null; winRate: number | null };
+                                    const fmtRet = (v: number | null) => v === null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+                                    const RsiRow = ({ label, gs }: { label: string; gs: GS }) => (
+                                        <tr className="border-t border-slate-700/40">
+                                            <td className="py-1.5 px-2 text-xs text-slate-400">{label}</td>
+                                            <td className="py-1.5 px-2 text-xs text-center text-slate-400">{gs.n}</td>
+                                            <td className={`py-1.5 px-2 text-xs text-center font-mono ${gs.medReturn === null ? 'text-slate-600' : gs.medReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                {fmtRet(gs.medReturn)}
+                                            </td>
+                                            <td className="py-1.5 px-2 text-xs text-center text-slate-400">
+                                                {gs.winRate !== null ? `${gs.winRate.toFixed(0)}%` : '—'}
+                                            </td>
+                                        </tr>
+                                    );
+                                    return (
+                                        <div className="mt-3 border border-slate-700/60 rounded-xl p-4 space-y-3">
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                <span className="text-xs font-semibold text-slate-300">RSI 增量價值分析（第二階段④）</span>
+                                                <span className="text-[10px] text-slate-500">進場時 RSI &lt; 45 vs RSI ≥ 45 的實際報酬差異</span>
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {([
+                                                    { title: '全部進場', sub: d.all },
+                                                    { title: 'Bias20 < 0% 進場', sub: d.negBias },
+                                                ] as const).map(({ title, sub }) => (
+                                                    <div key={title}>
+                                                        <div className="text-[10px] text-slate-500 mb-1">{title}</div>
+                                                        <table className="w-full text-left">
+                                                            <thead>
+                                                                <tr className="text-[10px] text-slate-600 border-b border-slate-700">
+                                                                    <th className="pb-1 px-2">RSI 組別</th>
+                                                                    <th className="pb-1 px-2 text-center">筆數</th>
+                                                                    <th className="pb-1 px-2 text-center">報酬中位數</th>
+                                                                    <th className="pb-1 px-2 text-center">勝率</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <RsiRow label="RSI < 45" gs={sub.low} />
+                                                                <RsiRow label="RSI ≥ 45" gs={sub.high} />
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <p className="text-[10px] text-slate-600 leading-relaxed">
+                                                若 RSI &lt; 45 組的報酬與勝率未明顯優於 RSI ≥ 45 組 → RSI 過濾條件無增量價值，可考慮移除。此為描述性分析（你的實際交易結果），與前瞻報酬矩陣（市場統計）互補。
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         )}
                     </>

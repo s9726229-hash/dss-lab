@@ -981,7 +981,7 @@ export const fetchTechnicalData = async (symbol: string, assets?: Asset[], trans
                 } else if (currentBias20 >= partialSellBias || checkSlopeDeteriorated(partialSellSlopeDays)) {
                     // 乖離/斜率任一項達標即醞釀賣出
                     return {
-                        target: isHeld ? '🟢 醞釀停利' : '🟢 高位勿追',
+                        target: isHeld ? '🟡 醞釀停利' : '🟡 高位勿追',
                         type: 'SELL',
                         conditions: [
                             { label: `乖離 ≥ +${partialSellBias}%`, satisfied: currentBias20 >= partialSellBias },
@@ -1016,7 +1016,7 @@ export const fetchTechnicalData = async (symbol: string, assets?: Asset[], trans
                     { label: `投信連賣 ≥ ${chipDays}日`, satisfied: true },
                 ]};
             } else if (fCS >= chipDays && marginConsecIncrease >= marginDays) {
-                chipHint = { target: '🟢 籌碼疑慮', type: 'SELL', conditions: [
+                chipHint = { target: '🟠 籌碼疑慮', type: 'SELL', conditions: [
                     { label: `外資連賣 ≥ ${chipDays}日`, satisfied: true },
                     { label: `融資連增 ≥ ${marginDays}日`, satisfied: true },
                 ]};
@@ -1028,7 +1028,7 @@ export const fetchTechnicalData = async (symbol: string, assets?: Asset[], trans
                 const satCount = (fSat ? 1 : 0) + (tSat ? 1 : 0) + (mBullish ? 1 : 0);
                 const neutralTarget = satCount >= 2 ? '🔴 籌碼偏多'
                     : satCount === 1 ? '🔵 籌碼觀察'
-                    : fCS >= 1 || tCS >= 1 || mBearish ? '🟢 籌碼偏弱'
+                    : fCS >= 1 || tCS >= 1 || mBearish ? '🟡 籌碼偏弱'
                     : '⚪ 籌碼中性';
                 const neutralType = satCount >= 1 ? 'BUY' as const : 'SELL' as const;
                 const isBullishZone = satCount >= 1;
@@ -1270,12 +1270,12 @@ export const computeDSSForDate = (
         if (fCS >= chipDays && tCS >= chipDays) {
             chipHint = { target: '🟢 法人棄守', type: 'SELL', conditions: [{ label: `外資連賣 ≥ ${chipDays}日`, satisfied: true }, { label: `投信連賣 ≥ ${chipDays}日`, satisfied: true }] };
         } else if (fCS >= chipDays && marginConsecIncrease >= marginDays) {
-            chipHint = { target: '🟢 籌碼疑慮', type: 'SELL', conditions: [{ label: `外資連賣 ≥ ${chipDays}日`, satisfied: true }, { label: `融資連增 ≥ ${marginDays}日`, satisfied: true }] };
+            chipHint = { target: '🟠 籌碼疑慮', type: 'SELL', conditions: [{ label: `外資連賣 ≥ ${chipDays}日`, satisfied: true }, { label: `融資連增 ≥ ${marginDays}日`, satisfied: true }] };
         } else {
             const fSat = fCB >= chipDays, tSat = tCB >= chipDays;
             const mBullish = marginConsecIncrease >= 1, mBearish = marginConsecDecrease >= 1;
             const satCount = (fSat ? 1 : 0) + (tSat ? 1 : 0) + (mBullish ? 1 : 0);
-            const neutralTarget = satCount >= 2 ? '🔴 籌碼偏多' : satCount === 1 ? '🔵 籌碼觀察' : fCS >= 1 || tCS >= 1 || mBearish ? '🟢 籌碼偏弱' : '⚪ 籌碼中性';
+            const neutralTarget = satCount >= 2 ? '🔴 籌碼偏多' : satCount === 1 ? '🔵 籌碼觀察' : fCS >= 1 || tCS >= 1 || mBearish ? '🟡 籌碼偏弱' : '⚪ 籌碼中性';
             const isBullishZone = satCount >= 1;
             chipHint = { target: neutralTarget, type: isBullishZone ? 'BUY' : 'SELL', conditions: [
                 { label: `外資連買 ≥ ${chipDays}日`, satisfied: fSat },

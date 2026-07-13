@@ -68,7 +68,7 @@ export interface Asset {
 
   // --- V7.1.0 Technical Monitor ---
   rsi?: number;
-  techSignal?: 'STRONG_BUY' | 'BUY' | 'PARTIAL_SELL' | 'FORCE_SELL' | 'STOP_LOSS' | 'NONE' | 'SECOND_PARTIAL_SELL' | 'FINAL_ADD' | 'STOP_LOSS_ALERT' | 'RISK_ALERT' | 'WATCH' | 'SELL' | 'STRONG_LAYOUT' | 'WATCH_DIVERGE';
+  techSignal?: 'STRONG_BUY' | 'BUY' | 'PARTIAL_SELL' | 'FORCE_SELL' | 'STOP_LOSS' | 'NONE' | 'SECOND_PARTIAL_SELL' | 'STOP_LOSS_ALERT' | 'RISK_ALERT' | 'WATCH' | 'SELL' | 'STRONG_LAYOUT' | 'WATCH_DIVERGE';
   biasSlopes?: number[]; // Index 0: today's slope, 1: yesterday's, 2: day before yesterday
   ma20Slope?: number;
   ma60?: number;
@@ -197,7 +197,7 @@ export interface TechDataResult {
     dailyChangeRatio: number | null;
     dailyChange: number | null;
     sizeCategory: 'LARGE_CAP' | 'SMALL_CAP' | 'ETF' | 'UNKNOWN';
-    techSignal: 'STRONG_BUY' | 'BUY' | 'PARTIAL_SELL' | 'FORCE_SELL' | 'STOP_LOSS' | 'NONE' | 'SECOND_PARTIAL_SELL' | 'FINAL_ADD' | 'STOP_LOSS_ALERT' | 'RISK_ALERT' | 'WATCH' | 'SELL' | 'STRONG_LAYOUT' | 'WATCH_DIVERGE';
+    techSignal: 'STRONG_BUY' | 'BUY' | 'PARTIAL_SELL' | 'FORCE_SELL' | 'STOP_LOSS' | 'NONE' | 'SECOND_PARTIAL_SELL' | 'STOP_LOSS_ALERT' | 'RISK_ALERT' | 'WATCH' | 'SELL' | 'STRONG_LAYOUT' | 'WATCH_DIVERGE';
     currentPrice?: number;
     marketRegime?: MarketRegime;
     riskAlerts?: RiskAlerts;

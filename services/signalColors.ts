@@ -1,7 +1,9 @@
 /**
  * 訊號燈號共用色彩定義。
  *
- * 台股習慣與美股相反：多方／利多（買進類訊號）= 紅，空方／利空（賣出、停損、風險警示類訊號）= 綠。
+ * 台股習慣與美股相反：多方／利多（買進類訊號）= 紅，確定空方（強制停利、建議賣出、停損類訊號）= 綠。
+ * 過渡警示層（尚未確定轉空，僅提醒注意）用黃/橘：輕度 = 黃（分批停利、醞釀停利、籌碼偏弱、風險預警），中度 = 橘（籌碼疑慮、持續觀察、再次減碼）。
+ * 整體光譜：🔴 偏多 → 🟡/🟠 警示過渡 → 🟢 確定賣出。
  * 「漲跌」「損益」等純數值方向的顏色不受此檔管轄（各畫面已各自處理，維持紅漲綠跌）。
  * 「風險狀態好壞」（大盤模式）與「準確度對錯」（回測吻合/背離）不屬於多空方向，不套用此處的反色邏輯。
  *
@@ -9,7 +11,7 @@
  */
 
 export type TechSignalKey =
-    | 'STRONG_BUY' | 'BUY' | 'STRONG_LAYOUT' | 'FINAL_ADD'
+    | 'STRONG_BUY' | 'BUY' | 'STRONG_LAYOUT'
     | 'PARTIAL_SELL' | 'SECOND_PARTIAL_SELL' | 'FORCE_SELL'
     | 'STOP_LOSS' | 'STOP_LOSS_ALERT' | 'RISK_ALERT' | 'WATCH_DIVERGE'
     | 'SELL' | 'WATCH' | 'NONE';
@@ -19,10 +21,9 @@ export const TECH_SIGNAL_BADGE_CLASS: Partial<Record<TechSignalKey, string>> = {
     STRONG_BUY: 'bg-red-600/30 text-red-400 border border-red-500/50',
     BUY: 'bg-rose-500/20 text-rose-400 border border-rose-500/30',
     STRONG_LAYOUT: 'bg-red-600/40 text-red-300 border border-red-400/60',
-    FINAL_ADD: 'bg-indigo-500/20 text-indigo-400 border border-indigo-500/30',
-    PARTIAL_SELL: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
-    SECOND_PARTIAL_SELL: 'bg-teal-500/20 text-teal-400 border border-teal-500/30',
-    WATCH_DIVERGE: 'bg-teal-500/20 text-teal-400 border border-teal-500/30',
+    PARTIAL_SELL: 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
+    SECOND_PARTIAL_SELL: 'bg-orange-500/20 text-orange-400 border border-orange-500/30',
+    WATCH_DIVERGE: 'bg-orange-500/20 text-orange-400 border border-orange-500/30',
     FORCE_SELL: 'bg-green-600/30 text-green-400 border border-green-500/50',
     SELL: 'bg-green-700/30 text-green-400 border border-green-500/50',
     STOP_LOSS: 'bg-green-700/30 text-green-400 border border-green-500/50',
@@ -31,11 +32,11 @@ export const TECH_SIGNAL_BADGE_CLASS: Partial<Record<TechSignalKey, string>> = {
 
 export const NEUTRAL_BADGE_CLASS = 'bg-slate-700/50 text-slate-400 border border-slate-600/30';
 
-/** 醞釀狀態（NONE / RISK_ALERT 且有 signalHint）的淡色 badge，依 signalHint.type 決定色系 */
+/** 醞釀狀態（NONE / RISK_ALERT 且有 signalHint）的淡色 badge，依 signalHint.type 決定色系；SELL 醞釀屬過渡警示層＝黃 */
 export const brewingBadgeClass = (hintType: string): string =>
     hintType === 'BUY'
         ? 'bg-rose-500/10 text-rose-400/80 border-rose-500/20'
-        : 'bg-emerald-500/10 text-emerald-400/80 border-emerald-500/20';
+        : 'bg-amber-500/10 text-amber-400/80 border-amber-500/20';
 
 /** 條件小標籤（子條件達標/未達標），達標時依訊號方向決定色系，未達標一律灰階 */
 export const conditionChipClass = (hintType: string, satisfied: boolean): string => {
@@ -50,8 +51,8 @@ export const chipHintBadgeClass = (target: string): string => {
     if (target.includes('偏多')) return 'bg-rose-500/10 text-rose-400/80 border-rose-500/20';
     if (target.includes('觀察')) return 'bg-sky-500/10 text-sky-400/80 border-sky-500/20';
     if (target.includes('棄守')) return 'bg-emerald-500/10 text-emerald-400/80 border-emerald-500/20';
-    if (target.includes('疑慮')) return 'bg-teal-500/10 text-teal-400/80 border-teal-500/20';
-    if (target.includes('偏弱')) return 'bg-teal-500/10 text-teal-400/80 border-teal-500/20';
+    if (target.includes('疑慮')) return 'bg-orange-500/10 text-orange-400/80 border-orange-500/20';
+    if (target.includes('偏弱')) return 'bg-amber-500/10 text-amber-400/80 border-amber-500/20';
     return 'bg-slate-500/10 text-slate-400/80 border-slate-500/20';
 };
 

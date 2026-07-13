@@ -85,10 +85,10 @@ const getSignalStyle = (sig: string) => TECH_SIGNAL_BADGE_CLASS[sig as keyof typ
 
 const getChipStyle = (target: string) => {
     if (target.includes('法人棄守')) return 'text-emerald-400';
-    if (target.includes('籌碼疑慮')) return 'text-teal-400';
+    if (target.includes('籌碼疑慮')) return 'text-orange-400';
     if (target.includes('籌碼偏多')) return 'text-red-400';
     if (target.includes('籌碼觀察')) return 'text-sky-400';
-    if (target.includes('籌碼偏弱')) return 'text-teal-400';
+    if (target.includes('籌碼偏弱')) return 'text-amber-400';
     return 'text-slate-400';
 };
 

@@ -165,6 +165,52 @@ const DSSLabParamGuide: React.FC = () => (
             </div>
         </div>
 
+        {/* ── 統計驗證方法論 ── */}
+        <div className="bg-violet-900/20 border border-violet-500/30 rounded-2xl p-6 space-y-4">
+            <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
+                <FlaskConical className="text-violet-400" size={18} /> 統計驗證方法論（2026-07-13 新增）
+            </h3>
+            <p className="text-sm text-slate-400 leading-relaxed">
+                Step1~6 的原始設計有六個統計問題，2026-07-13 識別並依嚴重度排定修正優先序：
+            </p>
+            <div className="space-y-3">
+                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-sm text-slate-400">
+                    <b className="text-red-300">問題① 同資料驗證（最嚴重）</b>：反推參數的交易池跟驗證效果的交易池是同一批，回測「改善」可能只是擬合歷史雜訊。<br />
+                    <b className="text-slate-300">修正（已完成）</b>：各分類依交易日期前 70% 為訓練期、後 30% 為驗證期。中位數與 KEEP_RATIO 篩選只在訓練期計算，驗證期採純計算式檢驗（找訓練期參數達標日、算報酬差）。進場/出場兩張 SplitValidationCard 顯示於各分析分頁。
+                </div>
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-sm text-slate-400">
+                    <b className="text-amber-300">問題② 後見之明定義性偏差</b>：最佳日是事後找最低點，Bias/RSI 跟價格連動，最低點那天指標偏低有一部分是數學必然，不代表指標有預測力。<br />
+                    <b className="text-slate-300">修正（已完成）</b>：新增「條件式前瞻報酬分析」—依 Bias20 分桶計算未來 N 天前瞻報酬，直接回答「指標達標後發生什麼」。資料源重用 ft_dsslab_raw_cache（已標注選樣偏誤）。見「前瞻報酬」分頁。
+                </div>
+                <div className="p-3 bg-slate-700/30 border border-slate-600/30 rounded-xl text-sm text-slate-400">
+                    <b className="text-slate-400">問題③~⑥ 次要問題</b>：樣本過小（254 筆後已可行）、KEEP_RATIO 倖存者偏差（已移入訓練期）、跨標的偽重複（已顯示標的分佈卡）、無市場狀態切分（暫不處理）。
+                </div>
+            </div>
+
+            <div className="pt-3 border-t border-violet-500/20 space-y-3">
+                <p className="text-sm font-semibold text-slate-300">第二階段：指標增量價值驗證（做減法）</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs text-slate-400">
+                    <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                        <b className="text-slate-300">④ RSI 增量分析（已完成，2026-07-13）</b><br />
+                        比較實際進場時 RSI&lt;45 vs RSI≥45 報酬差異。<b className="text-emerald-400">ETF/上櫃 RSI&lt;45 報酬明顯較高</b>（ETF: +49.5% vs +32.5%）；<b className="text-amber-400">上市幾乎不在 RSI&lt;45 觸發</b>（254 筆中僅 1 筆），此條件對上市形同虛設。
+                    </div>
+                    <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                        <b className="text-slate-300">⑤ 斜率確認棒數（已完成，2026-07-13）</b><br />
+                        比較 20MA 連升 0/1/≥2 天報酬差異。<b className="text-red-300">ETF 三組差距 &lt;3pp、完全無鑑別力</b>；上市斜率=1天略優但≥2天反而最差；上櫃方向不一致。<b className="text-red-300">整體建議移除斜率條件</b>。
+                    </div>
+                    <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-600/30 opacity-60">
+                        <b className="text-slate-400">⑥ 籌碼覆寫規則（待 FinMind 額度）</b><br />
+                        驗證「法人棄守後 N 天實際跌幅」是否支撐現有籌碼覆寫規則設計前提。
+                    </div>
+                    <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-600/30 opacity-60">
+                        <b className="text-slate-400">第三階段（未開始）</b><br />
+                        Bias 門檻改波動自適應 z-score、保守模式回測、訊號成效持續追蹤、參數版本化。
+                    </div>
+                </div>
+                <p className="text-[11px] text-slate-500">詳細數字見 DSS 實驗室 → <b>分析摘要</b> 分頁。</p>
+            </div>
+        </div>
+
         <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
             <h3 className="text-base font-bold text-slate-200 mb-3 flex items-center gap-2">
                 <HelpCircle className="text-amber-400" size={18} /> 待確認事項

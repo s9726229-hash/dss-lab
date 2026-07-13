@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { FlaskConical, Trophy, Target, ChevronDown, ChevronUp, BarChart2, Zap, Loader2, Save, Download, Upload, History, TrendingUp } from 'lucide-react';
+import { FlaskConical, Trophy, Target, ChevronDown, ChevronUp, BarChart2, Zap, Loader2, Save, Download, Upload, History, TrendingUp, ClipboardList } from 'lucide-react';
 import { StockTransaction, BacktestResult } from '../types';
 import { lookupStockName, fetchKlineWindow, computeMultiBias, computeDSSForDate, fetchHistoricalInstForBacktest, fetchHistoricalMarginForBacktest, CompletedTrade, buildCompletedTrades, loadDSSLabRawCache } from '../services/stock';
 import { getBacktestCache, getDSSProfiles, saveDSSProfiles, DSSProfile, getTechParameters } from '../services/storage';
@@ -205,6 +205,187 @@ interface RawCacheEntry {
     inst: { date: string; foreign: number; trust: number }[];
     margin: { date: string; balance: number }[];
 }
+
+const ParamDiagnosisSummary: React.FC<{ optimalResults: WindowResult[] | null }> = ({ optimalResults }) => {
+    const cats = ['ETF', '上市', '上櫃'] as const;
+    type GS = { n: number; medReturn: number | null; winRate: number | null };
+
+    const stats = useMemo(() => {
+        if (!optimalResults?.length) return null;
+        const grp = (trades: WindowResult[]): GS => ({
+            n: trades.length,
+            medReturn: median(trades.map(t => t.actualReturn)),
+            winRate: trades.length ? trades.filter(t => t.actualReturn > 0).length / trades.length * 100 : null,
+        });
+        return cats.reduce((acc, cat) => {
+            const all = optimalResults.filter(r => r.category === cat);
+            const withRsi = all.filter(r => r.actualRsi !== null);
+            const withSlope = all.filter(r => r.actualSlopeUpDays !== null);
+            acc[cat] = {
+                rsi: {
+                    low: grp(withRsi.filter(r => r.actualRsi! < 45)),
+                    high: grp(withRsi.filter(r => r.actualRsi! >= 45)),
+                },
+                slope: {
+                    s0: grp(withSlope.filter(r => r.actualSlopeUpDays === 0)),
+                    s1: grp(withSlope.filter(r => r.actualSlopeUpDays === 1)),
+                    s2p: grp(withSlope.filter(r => r.actualSlopeUpDays! >= 2)),
+                },
+            };
+            return acc;
+        }, {} as Record<'ETF' | '上市' | '上櫃', {
+            rsi: { low: GS; high: GS };
+            slope: { s0: GS; s1: GS; s2p: GS };
+        }>);
+    }, [optimalResults]);
+
+    const fmtRet = (v: number | null) => v === null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+    const fmtWR = (v: number | null) => v === null ? '—' : `${v.toFixed(0)}%`;
+    const retCls = (v: number | null) => v === null ? 'text-slate-600' : v >= 0 ? 'text-red-400' : 'text-emerald-400';
+
+    if (!stats) return (
+        <div className="text-center py-16 text-slate-500 text-sm">請先執行分析以產生摘要數據</div>
+    );
+
+    return (
+        <div className="space-y-5">
+            {/* ④ RSI */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-3">
+                <div>
+                    <span className="text-sm font-bold text-slate-300">④ RSI 增量分析</span>
+                    <span className="ml-2 text-[11px] text-slate-500">進場時 RSI &lt; 45 vs RSI ≥ 45 的實際報酬差異</span>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                        <thead>
+                            <tr className="text-slate-600 border-b border-slate-700">
+                                <th className="pb-1.5 px-3 text-left">類別</th>
+                                <th className="pb-1.5 px-3 text-center" colSpan={3}>RSI &lt; 45</th>
+                                <th className="pb-1.5 px-3 text-center" colSpan={3}>RSI ≥ 45</th>
+                                <th className="pb-1.5 px-3 text-left">判斷</th>
+                            </tr>
+                            <tr className="text-slate-700 border-b border-slate-700/40 text-[10px]">
+                                <th className="pb-1 px-3"></th>
+                                {['n','報酬','勝率','n','報酬','勝率'].map((h,i) => <th key={i} className="pb-1 px-3 text-center">{h}</th>)}
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {cats.map(cat => {
+                                const d = stats[cat].rsi;
+                                const insufficient = d.low.n < 5;
+                                const hasValue = !insufficient && d.low.medReturn !== null && d.high.medReturn !== null && (d.low.medReturn - d.high.medReturn > 5);
+                                return (
+                                    <tr key={cat} className="border-t border-slate-700/40">
+                                        <td className="py-2 px-3 font-semibold text-slate-300">{cat}</td>
+                                        <td className="py-2 px-3 text-center text-slate-400">{d.low.n}</td>
+                                        <td className={`py-2 px-3 text-center font-mono ${retCls(d.low.medReturn)}`}>{fmtRet(d.low.medReturn)}</td>
+                                        <td className="py-2 px-3 text-center text-slate-400">{fmtWR(d.low.winRate)}</td>
+                                        <td className="py-2 px-3 text-center text-slate-400">{d.high.n}</td>
+                                        <td className={`py-2 px-3 text-center font-mono ${retCls(d.high.medReturn)}`}>{fmtRet(d.high.medReturn)}</td>
+                                        <td className="py-2 px-3 text-center text-slate-400">{fmtWR(d.high.winRate)}</td>
+                                        <td className="py-2 px-3 text-[11px]">
+                                            {insufficient ? <span className="text-slate-500">樣本不足（n={d.low.n}）</span>
+                                                : hasValue ? <span className="text-emerald-400">有增量效果</span>
+                                                : <span className="text-slate-500">無增量效果</span>}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+                <p className="text-[11px] text-slate-600">上市 RSI&lt;45 僅 1 筆，訊號幾乎不在此區間觸發；ETF/上櫃 低 RSI 報酬明顯較高，條件有效。</p>
+            </div>
+
+            {/* ⑤ Slope */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-3">
+                <div>
+                    <span className="text-sm font-bold text-slate-300">⑤ 斜率確認棒數增量分析</span>
+                    <span className="ml-2 text-[11px] text-slate-500">20MA 連升 0 / 1 / ≥2 天的實際報酬差異</span>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                        <thead>
+                            <tr className="text-slate-600 border-b border-slate-700">
+                                <th className="pb-1.5 px-3 text-left">類別</th>
+                                <th className="pb-1.5 px-3 text-center" colSpan={3}>0 天</th>
+                                <th className="pb-1.5 px-3 text-center" colSpan={3}>1 天</th>
+                                <th className="pb-1.5 px-3 text-center" colSpan={3}>≥ 2 天</th>
+                                <th className="pb-1.5 px-3 text-left">判斷</th>
+                            </tr>
+                            <tr className="text-slate-700 border-b border-slate-700/40 text-[10px]">
+                                <th className="pb-1 px-3"></th>
+                                {['n','報酬','勝率','n','報酬','勝率','n','報酬','勝率'].map((h,i) => <th key={i} className="pb-1 px-3 text-center">{h}</th>)}
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {cats.map(cat => {
+                                const d = stats[cat].slope;
+                                const returns = [d.s0.medReturn, d.s1.medReturn, d.s2p.medReturn].filter((v): v is number => v !== null);
+                                const spread = returns.length > 1 ? Math.max(...returns) - Math.min(...returns) : 0;
+                                const noValue = spread < 5;
+                                const SCell = ({ gs }: { gs: GS }) => (<>
+                                    <td className="py-2 px-3 text-center text-slate-400">{gs.n}</td>
+                                    <td className={`py-2 px-3 text-center font-mono ${retCls(gs.medReturn)}`}>{fmtRet(gs.medReturn)}</td>
+                                    <td className="py-2 px-3 text-center text-slate-400">{fmtWR(gs.winRate)}</td>
+                                </>);
+                                return (
+                                    <tr key={cat} className="border-t border-slate-700/40">
+                                        <td className="py-2 px-3 font-semibold text-slate-300">{cat}</td>
+                                        <SCell gs={d.s0} />
+                                        <SCell gs={d.s1} />
+                                        <SCell gs={d.s2p} />
+                                        <td className="py-2 px-3 text-[11px]">
+                                            {noValue ? <span className="text-slate-500">無鑑別力</span>
+                                                : <span className="text-amber-400">差距 {spread.toFixed(0)}pp</span>}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+                <p className="text-[11px] text-slate-600">ETF 三組報酬差距 &lt;3pp；上市/上櫃方向不一致。整體無穩健增量價值，建議移除斜率條件。</p>
+            </div>
+
+            {/* 綜合建議 */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-3">
+                <span className="text-sm font-bold text-slate-300">綜合建議</span>
+                <table className="w-full text-xs mt-2">
+                    <thead>
+                        <tr className="text-slate-600 border-b border-slate-700 text-left">
+                            <th className="pb-1.5 px-3">指標</th>
+                            <th className="pb-1.5 px-3">ETF</th>
+                            <th className="pb-1.5 px-3">上市</th>
+                            <th className="pb-1.5 px-3">上櫃</th>
+                            <th className="pb-1.5 px-3">說明</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {[
+                            { name: 'Bias20 進場門檻', etf: '✓ 保留', market: '✓ 保留', otc: '✓ 保留', etfCls: 'text-emerald-400', mktCls: 'text-emerald-400', otcCls: 'text-emerald-400', note: '前瞻報酬分析確認 Bias20 越低報酬越高，核心條件' },
+                            { name: 'RSI 進場門檻', etf: '✓ 保留', market: '? 檢視', otc: '✓ 保留', etfCls: 'text-emerald-400', mktCls: 'text-amber-400', otcCls: 'text-emerald-400', note: '上市幾乎不在 RSI<45 觸發；ETF/上櫃低 RSI 有正向效果' },
+                            { name: '斜率連升天數', etf: '✗ 移除', market: '? 保持=1', otc: '✗ 移除', etfCls: 'text-red-400', mktCls: 'text-amber-400', otcCls: 'text-red-400', note: '跨類別方向不一致，無穩健增量價值' },
+                        ].map(row => (
+                            <tr key={row.name} className="border-t border-slate-700/40">
+                                <td className="py-2 px-3 font-medium text-slate-300">{row.name}</td>
+                                <td className={`py-2 px-3 ${row.etfCls}`}>{row.etf}</td>
+                                <td className={`py-2 px-3 ${row.mktCls}`}>{row.market}</td>
+                                <td className={`py-2 px-3 ${row.otcCls}`}>{row.otc}</td>
+                                <td className="py-2 px-3 text-slate-500">{row.note}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                <p className="text-[11px] text-slate-600 border-t border-slate-700/40 pt-2">
+                    樣本集中少數標的（華邦電 18 筆、元大高股息 18 筆等），有效資訊量低於表面筆數；建議作為「調整方向」而非硬性決策依據。⑥ 籌碼覆寫規則待 FinMind 額度充足後執行。
+                </p>
+            </div>
+        </div>
+    );
+};
 
 const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ results }) => {
     const [optimalCatTab, setOptimalCatTab] = useState<'ETF' | '上市' | '上櫃'>('上市');
@@ -1892,7 +2073,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
     const [sortKey, setSortKey] = useState<SortKey>('trades');
     const [sortAsc, setSortAsc] = useState(false);
     const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
-    const [activeSection, setActiveSection] = useState<'winrate' | 'optimal' | 'exit' | 'divergence' | 'forward' | 'backtest'>('winrate');
+    const [activeSection, setActiveSection] = useState<'winrate' | 'optimal' | 'exit' | 'divergence' | 'forward' | 'backtest' | 'summary'>('winrate');
 
     const OPTIMAL_CACHE_KEY = 'ft_dsslab_optimal_cache';
     const EXIT_CACHE_KEY = 'ft_dsslab_exit_cache';
@@ -2259,6 +2440,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                     { key: 'divergence', label: '背離分析', icon: BarChart2 },
                     { key: 'forward', label: '前瞻報酬', icon: TrendingUp },
                     { key: 'backtest', label: 'DSS 回測分析', icon: History },
+                    { key: 'summary', label: '分析摘要', icon: ClipboardList },
                 ] as const).map(({ key, label, icon: Icon }) => (
                     <button key={key} onClick={() => setActiveSection(key)}
                         className={`flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-t-lg transition-colors ${activeSection === key ? 'bg-slate-800/50 text-violet-400 border-b-2 border-violet-400' : 'text-slate-500 hover:text-slate-300'}`}>
@@ -2442,6 +2624,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                     {activeSection === 'exit' && <ExitAnalysisSection results={exitResults} />}
                     {activeSection === 'divergence' && <DivergenceAnalysisSection completedTrades={allCompleted} optimalResults={optimalResults} exitResults={exitResults} />}
                     {activeSection === 'forward' && <ForwardReturnSection completedTrades={allCompleted} optimalCatStats={parentOptimalCatStats} exitCatStats={parentExitCatStats} />}
+                    {activeSection === 'summary' && <ParamDiagnosisSummary optimalResults={optimalResults} />}
                 </>
             )}
         </div>

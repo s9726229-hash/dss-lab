@@ -92,7 +92,10 @@ export const Investments: React.FC<InvestmentsProps> = ({
     const [customEnd, setCustomEnd] = useState<string>('');
     const [autoUpdateEnabled, setAutoUpdateEnabledState] = useState(getAutoTechUpdateEnabled());
 
-    const inventory = useMemo(() => assets.filter(a => a.type === AssetType.STOCK), [assets]);
+    const inventory = useMemo(() =>
+        assets.filter(a => a.type === AssetType.STOCK)
+            .sort((a, b) => (a.symbol ?? '').localeCompare(b.symbol ?? '', undefined, { numeric: true })),
+        [assets]);
 
     const STALE_THRESHOLD = 14 * 24 * 60 * 60 * 1000;
 

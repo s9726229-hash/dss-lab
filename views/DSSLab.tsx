@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { FlaskConical, Trophy, Target, ChevronDown, ChevronUp, BarChart2, Zap, Loader2, Save, Download, Upload, History, TrendingUp, ClipboardList, Activity } from 'lucide-react';
+import { FlaskConical, Trophy, Target, ChevronDown, ChevronUp, BarChart2, Zap, Loader2, Save, Download, Upload, History, TrendingUp, ClipboardList, Activity, SlidersHorizontal } from 'lucide-react';
 import { StockTransaction, BacktestResult } from '../types';
 import { lookupStockName, fetchKlineWindow, computeMultiBias, computeDSSForDate, fetchHistoricalInstForBacktest, fetchHistoricalMarginForBacktest, CompletedTrade, buildCompletedTrades, loadDSSLabRawCache } from '../services/stock';
 import { getBacktestCache, getDSSProfiles, saveDSSProfiles, DSSProfile, getTechParameters } from '../services/storage';
@@ -1472,6 +1472,181 @@ const SignalTrackerSection: React.FC = () => {
     );
 };
 
+// ── 參數建議頁：④~⑧ 結論總整理 ＋ 各參數建議值與採納原因 ＋ 儲存設定檔 ────────
+type Verdict = '採納' | '參考' | '不採納' | '不適用';
+
+const VerdictBadge: React.FC<{ v: Verdict }> = ({ v }) => {
+    const cls = v === '採納' ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+        : v === '參考' ? 'bg-amber-500/15 border-amber-500/40 text-amber-300'
+        : v === '不採納' ? 'bg-red-500/15 border-red-500/40 text-red-400'
+        : 'bg-slate-600/20 border-slate-600/40 text-slate-500';
+    const mark = v === '採納' ? '✓ 採納' : v === '參考' ? '？參考' : v === '不採納' ? '✗ 不採納' : '— 不適用';
+    return <span className={`text-[10px] px-2 py-0.5 rounded border font-bold whitespace-nowrap ${cls}`}>{mark}</span>;
+};
+
+const ParamRecommendationSection: React.FC<{
+    optimalResults: WindowResult[] | null;
+    exitResults: ExitWindowResult[] | null;
+    onSave: () => void;
+    savedMsg: string;
+}> = ({ optimalResults, exitResults, onSave, savedMsg }) => {
+    const [tab, setTab] = useState<'ETF' | '上市' | '上櫃'>('上市');
+
+    /** 與 handleSaveOptimalProfile 完全相同的資料來源：訓練期（前70%）中位數 */
+    const statsByCat = useMemo(() => {
+        if (!optimalResults?.length && !exitResults?.length) return null;
+        const out = {} as Record<'ETF' | '上市' | '上櫃', {
+            entry: OptimalCatStats | null; exit: ExitCatStats | null; stopLoss: ExitCatStats | null;
+        }>;
+        (['ETF', '上市', '上櫃'] as const).forEach(cat => {
+            const entryTrain = optimalResults?.length ? splitByDate(optimalResults.filter(r => r.category === cat), r => r.buyDate).train : null;
+            const exitTrain = exitResults?.length ? splitByDate(exitResults.filter(r => r.category === cat), r => r.sellDate).train : null;
+            out[cat] = {
+                entry: entryTrain?.length ? buildOptimalCatStats(entryTrain, cat) : null,
+                exit: exitTrain?.length ? buildExitCatStats(exitTrain, cat) : null,
+                stopLoss: exitTrain?.length ? buildStopLossCatStats(exitTrain, cat) : null,
+            };
+        });
+        return out;
+    }, [optimalResults, exitResults]);
+
+    if (!statsByCat) return (
+        <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5">
+            <div className="text-center py-12 text-slate-500 text-sm">尚未執行分析，請至上方點擊「開始分析」後再檢視參數建議</div>
+        </div>
+    );
+
+    const s = statsByCat[tab];
+    const pct = (v: number | null | undefined) => v == null ? '—' : `${v.toFixed(1)}%`;
+    const num = (v: number | null | undefined) => v == null ? '—' : v.toFixed(1);
+    const day = (v: number | null | undefined) => v == null ? '—' : `${v} 天`;
+
+    /** 每個參數的採納判定與一句話原因（依④~⑧真實資料結論，部分依分類不同） */
+    interface ParamRow { label: string; value: string; verdict: Verdict; reason: string; }
+    const rsiVerdict: Verdict = tab === '上市' ? '參考' : '採納';
+    const rsiReason = tab === '上市'
+        ? '④上市幾乎不在 RSI<45 觸發（254 筆僅 1 筆），條件形同虛設'
+        : '④低 RSI 組報酬明顯較高（ETF +49.5% vs +32.5%），條件有效';
+    const marginVerdict: Verdict = tab === '上市' ? '採納' : '參考';
+    const marginReason = tab === '上市'
+        ? '⑥融資連增≥3天勝率 82%→56%（-26pp），背離降級有效'
+        : tab === 'ETF' ? '⑥報酬降約 9pp 方向符合，但樣本少僅供參考' : '⑥上櫃方向不一致，僅供參考';
+
+    const groups: { title: string; rows: ParamRow[] }[] = [
+        {
+            title: '進場（適合布局）',
+            rows: [
+                { label: 'Bias20 買進門檻', value: pct(s.entry?.medBias20), verdict: '採納', reason: '②前瞻報酬＋①驗證期檢驗均支持：Bias20 越低報酬越高，核心條件' },
+                { label: 'RSI 買進門檻', value: num(s.entry?.medRsi), verdict: rsiVerdict, reason: rsiReason },
+                { label: '斜率連升天數', value: day(s.entry?.medSlopeUpDays), verdict: '不採納', reason: '⑤三組報酬無鑑別力、跨類別方向不一致；建議設 0 使其失效' },
+                { label: 'Bias5 / Bias10', value: `${pct(s.entry?.medBias5)} / ${pct(s.entry?.medBias10)}`, verdict: '參考', reason: '未做增量驗證，僅供對照，不建議當硬性條件' },
+            ],
+        },
+        {
+            title: '強買（強力布局）',
+            rows: [
+                { label: '強買 Bias20 門檻', value: pct(s.entry?.medStrongBias20), verdict: '採納', reason: '取單一最佳進場日中位數，比普通買進更嚴格' },
+                { label: '強買 RSI 門檻', value: num(s.entry?.medStrongRsi), verdict: rsiVerdict, reason: rsiReason },
+                { label: '強買斜率連升天數', value: day(s.entry?.medStrongSlopeUpDays), verdict: '不採納', reason: '同⑤：斜率無增量價值' },
+            ],
+        },
+        {
+            title: '籌碼（進場時參考）',
+            rows: [
+                { label: '外資連買天數', value: day(s.entry?.medForeignConsecBuy), verdict: '參考', reason: '⑥共振升級跨類別方向不一致，效果存疑' },
+                { label: '投信連買天數', value: day(s.entry?.medTrustConsecBuy), verdict: '參考', reason: '⑥共振升級跨類別方向不一致，效果存疑' },
+                { label: '融資連增天數', value: day(s.entry?.medMarginConsecIncrease), verdict: marginVerdict, reason: marginReason },
+            ],
+        },
+        {
+            title: '停利（獲利出場）',
+            rows: [
+                { label: '分批停利 Bias20', value: pct(s.exit?.medBias20), verdict: '採納', reason: '獲利交易最佳出場日特徵（±2日樣本池中位數），驗證期檢驗可泛化' },
+                { label: '強制停利 Bias20', value: pct(s.exit?.medForceBias20), verdict: '採納', reason: '取單一最佳出場日中位數，比分批停利更嚴格' },
+                { label: '停利 RSI', value: num(s.exit?.medRsi), verdict: '參考', reason: '未做獨立增量驗證，僅供對照' },
+            ],
+        },
+        {
+            title: '停損（虧損出場）',
+            rows: tab === 'ETF' ? [
+                { label: '停損參數', value: '—', verdict: '不適用', reason: 'ETF 無停損層（既有設計），視為長線持有' },
+            ] : [
+                { label: '停損 Bias20', value: pct(s.stopLoss?.medBias20), verdict: '參考', reason: `虧損樣本少（訓練期 ${s.stopLoss?.n ?? 0} 筆），統計不穩，僅供參考` },
+                { label: '強制停損 Bias20', value: pct(s.stopLoss?.medForceBias20), verdict: '參考', reason: '同上：樣本不足，維持現行固定停損 % 為主' },
+            ],
+        },
+    ];
+
+    return (
+        <div className="space-y-5">
+            {/* ④~⑧ 結論總整理 */}
+            <div className="bg-violet-900/20 border border-violet-500/30 rounded-2xl p-5 space-y-2">
+                <h3 className="text-sm font-bold text-slate-200">統計驗證結論總整理（④~⑧，2026-07 完成）</h3>
+                <ul className="text-xs text-slate-400 space-y-1.5">
+                    <li><b className="text-emerald-400">④ RSI</b>：ETF/上櫃有效保留；上市幾乎不觸發，僅供參考。</li>
+                    <li><b className="text-red-400">⑤ 斜率</b>：三類別均無鑑別力，不採納（建議設 0 失效）。</li>
+                    <li><b className="text-amber-300">⑥ 籌碼</b>：僅上市「融資連增降級」有效；外資/投信共振升級存疑、參考。</li>
+                    <li><b className="text-emerald-400">⑦ z-score</b>：驗證期全數不優於固定門檻，維持固定百分比門檻。</li>
+                    <li><b className="text-emerald-400">⑧ 保守模式</b>：保守日進場僅 9 筆且全數獲利，維持「僅警示、不阻斷買進」。</li>
+                </ul>
+                <p className="text-[10px] text-slate-600">樣本集中少數標的，建議值作為「調整方向」而非硬性依據；詳細數字見「分析摘要」分頁。</p>
+            </div>
+
+            {/* 參數建議表 */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div>
+                        <span className="text-sm font-bold text-slate-200">參數建議（訓練期中位數）</span>
+                        <span className="ml-2 text-[11px] text-slate-500">與「儲存為設定檔」相同資料來源：各分類日期前 {Math.round(TRAIN_RATIO * 100)}% 交易</span>
+                    </div>
+                    <div className="ml-auto flex items-center gap-2">
+                        {savedMsg && <span className="text-xs text-emerald-400">{savedMsg}</span>}
+                        <button onClick={onSave}
+                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 font-bold bg-violet-600 hover:bg-violet-500 border border-violet-500 text-white rounded-lg transition-colors">
+                            <Save size={12} />儲存為設定檔
+                        </button>
+                    </div>
+                </div>
+                <div className="flex gap-1">
+                    {(['ETF', '上市', '上櫃'] as const).map(t => {
+                        const st = statsByCat[t];
+                        const disabled = !st.entry && !st.exit && !st.stopLoss;
+                        return (
+                            <button key={t} onClick={() => !disabled && setTab(t)} disabled={disabled}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                                    tab === t && !disabled ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                                    : disabled ? 'text-slate-600 cursor-not-allowed'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/50'}`}>
+                                {t}{st.entry ? <span className="ml-1 text-slate-500">(n={st.entry.n})</span> : <span className="ml-1 text-slate-600">(不足)</span>}
+                            </button>
+                        );
+                    })}
+                </div>
+                {groups.map(g => (
+                    <div key={g.title}>
+                        <div className="text-[11px] font-semibold text-slate-400 mb-1">{g.title}</div>
+                        <table className="w-full text-xs">
+                            <tbody>
+                                {g.rows.map(row => (
+                                    <tr key={row.label} className="border-t border-slate-700/40">
+                                        <td className="py-2 px-3 text-slate-300 w-44">{row.label}</td>
+                                        <td className="py-2 px-3 font-mono text-amber-300 w-28">{row.value}</td>
+                                        <td className="py-2 px-3 w-24"><VerdictBadge v={row.verdict} /></td>
+                                        <td className="py-2 px-3 text-slate-500">{row.reason}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                ))}
+                <p className="text-[11px] text-slate-600 border-t border-slate-700/40 pt-2">
+                    「儲存為設定檔」會存入全部欄位（含「參考」與「不採納」者）；到系統設定套用時，建議依上表把「不採納」的斜率設為 0、上市 RSI 門檻放寬，讓無效條件實質失效。
+                </p>
+            </div>
+        </div>
+    );
+};
+
 const daysBetween2 = (d1: string, d2: string) => {
     const diff = new Date(d2).getTime() - new Date(d1).getTime();
     return Math.round(diff / 86400000);
@@ -2786,7 +2961,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
     const [sortKey, setSortKey] = useState<SortKey>('trades');
     const [sortAsc, setSortAsc] = useState(false);
     const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
-    const [activeSection, setActiveSection] = useState<'winrate' | 'optimal' | 'exit' | 'divergence' | 'forward' | 'backtest' | 'summary' | 'tracker'>('winrate');
+    const [activeSection, setActiveSection] = useState<'winrate' | 'optimal' | 'exit' | 'divergence' | 'forward' | 'backtest' | 'summary' | 'tracker' | 'params'>('winrate');
 
     const OPTIMAL_CACHE_KEY = 'ft_dsslab_optimal_cache';
     const EXIT_CACHE_KEY = 'ft_dsslab_exit_cache';
@@ -3154,6 +3329,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                     { key: 'forward', label: '前瞻報酬', icon: TrendingUp },
                     { key: 'backtest', label: 'DSS 回測分析', icon: History },
                     { key: 'summary', label: '分析摘要', icon: ClipboardList },
+                    { key: 'params', label: '參數建議', icon: SlidersHorizontal },
                     { key: 'tracker', label: '訊號成效', icon: Activity },
                 ] as const).map(({ key, label, icon: Icon }) => (
                     <button key={key} onClick={() => setActiveSection(key)}
@@ -3195,6 +3371,8 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                 <BacktestView allTransactions={stockTransactions} filteredTransactions={stockTransactions} />
             ) : activeSection === 'tracker' ? (
                 <SignalTrackerSection />
+            ) : activeSection === 'params' ? (
+                <ParamRecommendationSection optimalResults={optimalResults} exitResults={exitResults} onSave={handleSaveOptimalProfile} savedMsg={savedProfileMsg} />
             ) : allCompleted.length === 0 ? (
                 <div className="text-center py-20 text-slate-500">
                     <FlaskConical size={40} className="mx-auto mb-3 opacity-30" />

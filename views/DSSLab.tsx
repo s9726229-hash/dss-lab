@@ -206,9 +206,96 @@ interface RawCacheEntry {
     margin: { date: string; balance: number }[];
 }
 
+/** ⑧ 大盤狀態判定規則（與 fetchMarketRegime 一致）：Bias20 ≤ -10% 或單日跌 ≥5% → 防禦；≤ -5% 或單日跌 ≥3% → 保守 */
+type RegimeLabel = 'NORMAL' | 'CONSERVATIVE' | 'DEFENSIVE';
+const regimeOf = (bias20: number, dayChange: number): RegimeLabel =>
+    (bias20 <= -10 || dayChange <= -5) ? 'DEFENSIVE' : (bias20 <= -5 || dayChange <= -3) ? 'CONSERVATIVE' : 'NORMAL';
+
+const TAIEX_CACHE_KEY = 'ft_dsslab_taiex_cache';
+
 const ParamDiagnosisSummary: React.FC<{ optimalResults: WindowResult[] | null }> = ({ optimalResults }) => {
     const cats = ['ETF', '上市', '上櫃'] as const;
     type GS = { n: number; medReturn: number | null; winRate: number | null };
+
+    /** ⑧ TAIEX 歷史 K 線：涵蓋全部進場日期範圍，localStorage 快取避免重抓 */
+    const [taiexKline, setTaiexKline] = useState<{ date: string; close: number }[] | null>(null);
+    useEffect(() => {
+        if (!optimalResults?.length) return;
+        const dates = optimalResults.map(r => r.buyDate);
+        const minDate = dates.reduce((m, d) => d < m ? d : m);
+        const maxDate = dates.reduce((m, d) => d > m ? d : m);
+        try {
+            const cached = JSON.parse(localStorage.getItem(TAIEX_CACHE_KEY) || 'null');
+            if (cached?.kline?.length && cached.minDate <= minDate && cached.maxDate >= maxDate) {
+                setTaiexKline(cached.kline);
+                return;
+            }
+        } catch { /* 快取損壞則重抓 */ }
+        let alive = true;
+        (async () => {
+            const kline = await fetchKlineWindow('TAIEX', minDate, 40, daysBetween2(minDate, maxDate) + 5);
+            if (!alive || !kline?.length) return;
+            try { localStorage.setItem(TAIEX_CACHE_KEY, JSON.stringify({ minDate, maxDate, kline })); } catch { /* 空間不足則不快取 */ }
+            setTaiexKline(kline);
+        })();
+        return () => { alive = false; };
+    }, [optimalResults]);
+
+    /** ⑧ 保守模式回測：進場日大盤狀態分組 ＋「保守日只允許強買」情境模擬 */
+    const regimeAnalysis = useMemo(() => {
+        if (!optimalResults?.length || !taiexKline?.length) return null;
+        const regimeByDate = new Map<string, RegimeLabel>();
+        for (let i = 19; i < taiexKline.length; i++) {
+            let sum = 0;
+            for (let j = i - 19; j <= i; j++) sum += taiexKline[j].close;
+            const ma20 = sum / 20;
+            if (!ma20) continue;
+            const bias20 = ((taiexKline[i].close - ma20) / ma20) * 100;
+            const prev = taiexKline[i - 1].close;
+            const dayChange = prev ? ((taiexKline[i].close - prev) / prev) * 100 : 0;
+            regimeByDate.set(taiexKline[i].date, regimeOf(bias20, dayChange));
+        }
+        const grp = (list: WindowResult[]): GS => ({
+            n: list.length,
+            medReturn: median(list.map(t => t.actualReturn)),
+            winRate: list.length ? list.filter(t => t.actualReturn > 0).length / list.length * 100 : null,
+        });
+        const withRegime = optimalResults
+            .map(r => ({ r, regime: regimeByDate.get(r.buyDate) }))
+            .filter((x): x is { r: WindowResult; regime: RegimeLabel } => x.regime !== undefined);
+        if (!withRegime.length) return null;
+        const byCat = cats.map(cat => {
+            const list = withRegime.filter(x => x.r.category === cat);
+            return {
+                cat,
+                normal: grp(list.filter(x => x.regime === 'NORMAL').map(x => x.r)),
+                conservative: grp(list.filter(x => x.regime === 'CONSERVATIVE').map(x => x.r)),
+                defensive: grp(list.filter(x => x.regime === 'DEFENSIVE').map(x => x.r)),
+            };
+        });
+        // 情境模擬：保守日進場的交易，用現行強買門檻（Bias20/RSI，斜率已判定移除不納入）判斷放行/被擋
+        const params = getTechParameters();
+        const strongOf = (cat: 'ETF' | '上市' | '上櫃') =>
+            cat === 'ETF' ? { bias: params.etfStrongBuyBias, rsi: params.etfStrongBuyRsi }
+            : cat === '上市' ? { bias: params.largeCapStrongBuyBias, rsi: params.largeCapStrongBuyRsi }
+            : { bias: params.smallCapStrongBuyBias, rsi: params.smallCapStrongBuyRsi };
+        const isStrong = (r: WindowResult) => {
+            const th = strongOf(r.category);
+            return r.actualBias20 !== null && r.actualRsi !== null && r.actualBias20 <= th.bias && r.actualRsi < th.rsi;
+        };
+        const consTrades = withRegime.filter(x => x.regime === 'CONSERVATIVE').map(x => x.r);
+        const defTrades = withRegime.filter(x => x.regime === 'DEFENSIVE').map(x => x.r);
+        return {
+            byCat,
+            sim: {
+                pass: grp(consTrades.filter(isStrong)),
+                blocked: grp(consTrades.filter(r => !isStrong(r))),
+            },
+            defensive: grp(defTrades),
+            nMatched: withRegime.length,
+            nTotal: optimalResults.length,
+        };
+    }, [optimalResults, taiexKline]);
 
     const stats = useMemo(() => {
         if (!optimalResults?.length) return null;
@@ -587,6 +674,102 @@ const ParamDiagnosisSummary: React.FC<{ optimalResults: WindowResult[] | null }>
                         <p className="text-[11px] text-slate-600">
                             z-score 把 Bias20 依各股自身近{Z_WINDOW}日波動標準化：高波動股的 −3% 可能只是 z≈−0.5（家常便飯），低波動 ETF 的 −3% 可能是 z≈−2.5（罕見超跌）。
                             若 z-score 規則驗證期改善率未明顯優於固定門檻（差距 ≤5pp）→ 無增量價值，維持固定百分比門檻。
+                        </p>
+                    </>
+                )}
+            </div>
+
+            {/* ⑧ 保守模式回測 */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-4">
+                <div>
+                    <span className="text-sm font-bold text-slate-300">⑧ 保守模式回測</span>
+                    <span className="ml-2 text-[11px] text-slate-500">重建進場日的大盤狀態（TWII Bias20 ≤ −5% 或日跌 ≥3% → 保守），模擬「保守日只允許強買」政策的影響</span>
+                </div>
+                {!regimeAnalysis ? (
+                    <div className="text-xs text-slate-500 py-4 text-center">
+                        {optimalResults?.length ? 'TAIEX 大盤資料載入中…（首次需抓取，之後走快取）' : '請先執行分析'}
+                    </div>
+                ) : (
+                    <>
+                        <div className="overflow-x-auto">
+                            <div className="text-[11px] text-slate-500 mb-1">
+                                進場日大盤狀態 × 實際報酬（描述性；{regimeAnalysis.nMatched}/{regimeAnalysis.nTotal} 筆有大盤資料）
+                            </div>
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-slate-600 border-b border-slate-700">
+                                        <th className="pb-1.5 px-3 text-left">類別</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>正常日</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>保守日</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>防禦日</th>
+                                    </tr>
+                                    <tr className="text-slate-700 border-b border-slate-700/40 text-[10px]">
+                                        <th className="pb-1 px-3"></th>
+                                        {['n','報酬','勝率','n','報酬','勝率','n','報酬','勝率'].map((h,i) => <th key={i} className="pb-1 px-3 text-center">{h}</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {regimeAnalysis.byCat.map(row => {
+                                        const RCell = ({ gs }: { gs: GS }) => (<>
+                                            <td className="py-2 px-3 text-center text-slate-400">{gs.n}</td>
+                                            <td className={`py-2 px-3 text-center font-mono ${gs.n < 5 ? 'text-slate-600' : retCls(gs.medReturn)}`}>{gs.n === 0 ? '—' : gs.n < 5 ? '(n<5)' : fmtRet(gs.medReturn)}</td>
+                                            <td className="py-2 px-3 text-center text-slate-400">{gs.n < 5 ? '—' : fmtWR(gs.winRate)}</td>
+                                        </>);
+                                        return (
+                                            <tr key={row.cat} className="border-t border-slate-700/40">
+                                                <td className="py-2 px-3 font-semibold text-slate-300">{row.cat}</td>
+                                                <RCell gs={row.normal} />
+                                                <RCell gs={row.conservative} />
+                                                <RCell gs={row.defensive} />
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <div className="text-[11px] text-slate-500 mb-1">情境模擬：若保守日只允許強買（以現行強買門檻 Bias20/RSI 判定，斜率不納入），保守日進場會被分成：</div>
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-slate-600 border-b border-slate-700 text-left">
+                                        <th className="pb-1.5 px-3">組別</th>
+                                        <th className="pb-1.5 px-3 text-center">n</th>
+                                        <th className="pb-1.5 px-3 text-center">報酬中位數</th>
+                                        <th className="pb-1.5 px-3 text-center">勝率</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {([
+                                        { label: '達強買門檻（政策下放行）', gs: regimeAnalysis.sim.pass },
+                                        { label: '未達強買門檻（政策下會被擋）', gs: regimeAnalysis.sim.blocked },
+                                    ] as const).map(({ label, gs }) => (
+                                        <tr key={label} className="border-t border-slate-700/40">
+                                            <td className="py-2 px-3 text-slate-300">{label}</td>
+                                            <td className="py-2 px-3 text-center text-slate-400">{gs.n}</td>
+                                            <td className={`py-2 px-3 text-center font-mono ${gs.n < 5 ? 'text-slate-600' : retCls(gs.medReturn)}`}>{gs.n === 0 ? '—' : gs.n < 5 ? '(n<5)' : fmtRet(gs.medReturn)}</td>
+                                            <td className="py-2 px-3 text-center text-slate-400">{gs.n < 5 ? '—' : fmtWR(gs.winRate)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                            {(() => {
+                                const { pass, blocked } = regimeAnalysis.sim;
+                                if (blocked.n < 5 || pass.n + blocked.n < 10) return (
+                                    <p className="text-[11px] text-amber-400/80 mt-2">保守日進場樣本不足（放行 {pass.n} / 被擋 {blocked.n}），無法對政策下結論，維持現行「僅警示」。</p>
+                                );
+                                const dv = blocked.medReturn !== null && pass.medReturn !== null ? blocked.medReturn - pass.medReturn : null;
+                                return (
+                                    <p className="text-[11px] mt-2">
+                                        {dv === null ? <span className="text-slate-500">—</span>
+                                            : dv < -5 ? <span className="text-emerald-400">被擋組報酬低 {(-dv).toFixed(1)}pp → 支持「保守日只允許強買」政策</span>
+                                            : <span className="text-slate-500">被擋組報酬與放行組差距 {dv >= 0 ? '+' : ''}{dv.toFixed(1)}pp，未明顯較差 → 改政策無增量價值，維持現行「僅警示」</span>}
+                                    </p>
+                                );
+                            })()}
+                        </div>
+                        <p className="text-[11px] text-slate-600">
+                            防禦日（TWII Bias20 ≤ −10% 或日跌 ≥5%）現行已阻斷所有買進；此處防禦日欄位顯示的是「歷史上你實際在防禦日進場」的交易，供對照。
+                            大盤狀態依進場當日 TAIEX 收盤重建，與即時系統判定規則一致。
                         </p>
                     </>
                 )}

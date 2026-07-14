@@ -172,9 +172,13 @@ const DSSLabParamGuide: React.FC = () => (
                         <b className="text-slate-300">⑦ Bias 門檻波動自適應 z-score（已完成，2026-07-14）</b><br />
                         將 Bias20 依各股近 60 日波動標準化為 z-score，與固定百分比門檻做訓練/驗證期對比（門檻皆取訓練期最佳進場日中位數）。<b className="text-red-300">z-score 規則在三個類別的驗證期改善率全數不優於固定門檻</b>（ETF -3.1pp、上市 -5.0pp、上櫃固定門檻優 7.0pp）。<b className="text-red-300">結論：無增量價值，維持固定百分比門檻</b>。z 分桶描述上「z≤-1 深跌組」報酬較高（上市 +28.5% vs 全體 +8%），但轉成規則後泛化不如固定門檻，不採用。
                     </div>
+                    <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                        <b className="text-slate-300">⑧ 保守模式回測（已完成，2026-07-14）</b><br />
+                        以 TAIEX 歷史收盤重建每筆進場日的大盤狀態，模擬「保守日只允許強買」政策。<b className="text-amber-400">保守日進場僅 9 筆（254 筆中），樣本不足以下統計結論</b>；且這 9 筆全數未達強買門檻（政策下會全被擋），實際報酬中位數 +38.2%、勝率 100%，方向上反而不支持收緊。<b className="text-red-300">結論：維持現行「保守模式僅警示、不阻斷買進」</b>。
+                    </div>
                     <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-600/30 opacity-60">
-                        <b className="text-slate-400">第三階段（進行中，⑦已完成）</b><br />
-                        保守模式回測、訊號成效持續追蹤、參數版本化。
+                        <b className="text-slate-400">第三階段（進行中，⑦⑧已完成）</b><br />
+                        訊號成效持續追蹤、參數版本化。
                     </div>
                 </div>
                 <p className="text-[11px] text-slate-500">詳細數字見 DSS 實驗室 → <b>分析摘要</b> 分頁。</p>

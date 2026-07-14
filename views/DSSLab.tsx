@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { FlaskConical, Trophy, Target, ChevronDown, ChevronUp, BarChart2, Zap, Loader2, Save, Download, Upload, History, TrendingUp, ClipboardList } from 'lucide-react';
+import { FlaskConical, Trophy, Target, ChevronDown, ChevronUp, BarChart2, Zap, Loader2, Save, Download, Upload, History, TrendingUp, ClipboardList, Activity } from 'lucide-react';
 import { StockTransaction, BacktestResult } from '../types';
 import { lookupStockName, fetchKlineWindow, computeMultiBias, computeDSSForDate, fetchHistoricalInstForBacktest, fetchHistoricalMarginForBacktest, CompletedTrade, buildCompletedTrades, loadDSSLabRawCache } from '../services/stock';
 import { getBacktestCache, getDSSProfiles, saveDSSProfiles, DSSProfile, getTechParameters } from '../services/storage';
+import { getSignalLog, saveSignalLog, backfillRecord, SignalRecord } from '../services/signalTracker';
 import { BacktestView } from './BacktestView';
 
 interface Props {
@@ -1280,6 +1281,190 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                 })()}
                             </div>
                         )}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// ── 第三階段⑨：訊號成效持續追蹤 ─────────────────────────────────────────────
+const SIGNAL_LABELS: Record<string, string> = {
+    STRONG_LAYOUT: '🚀 強力布局', STRONG_BUY: '🔴 強力買進', BUY: '🔴 適合布局',
+    PARTIAL_SELL: '🟡 分批停利', SECOND_PARTIAL_SELL: '🟠 再次減碼',
+    FORCE_SELL: '🟢 強制停利', SELL: '🟢 建議賣出',
+    STOP_LOSS: '🟢 停損', STOP_LOSS_ALERT: '⚠️ 停損預警', RISK_ALERT: '⚠️ 風險預警',
+    WATCH: '🟠 持續觀察', WATCH_DIVERGE: '🟠 觀察背離',
+};
+/** 買進方向訊號：發訊後報酬應為正才代表有預測力；其餘（停利/賣出/警示）後續應偏弱 */
+const BUY_DIRECTION_SIGNALS = new Set(['STRONG_LAYOUT', 'STRONG_BUY', 'BUY']);
+
+const SignalTrackerSection: React.FC = () => {
+    const [log, setLog] = useState<SignalRecord[]>([]);
+    const [backfilling, setBackfilling] = useState(false);
+    const [backfillProgress, setBackfillProgress] = useState<{ done: number; total: number } | null>(null);
+    useEffect(() => { setLog(getSignalLog()); }, []);
+
+    const today = new Date().toLocaleDateString('sv');
+    /** 待回填：尚未填滿 30 日報酬、且發訊至少 7 個日曆天（才可能有 5 個交易日資料） */
+    const pending = useMemo(
+        () => log.filter(r => r.fwd?.d30 == null && daysBetween2(r.date, today) >= 7),
+        [log, today]);
+
+    const handleBackfill = async () => {
+        if (!pending.length || backfilling) return;
+        setBackfilling(true);
+        const bySymbol = new Map<string, SignalRecord[]>();
+        pending.forEach(r => {
+            const list = bySymbol.get(r.symbol) ?? [];
+            list.push(r);
+            bySymbol.set(r.symbol, list);
+        });
+        const updated = [...log];
+        let done = 0;
+        const total = bySymbol.size;
+        for (const [symbol, recs] of bySymbol) {
+            setBackfillProgress({ done, total });
+            const minDate = recs.reduce((m, r) => r.date < m ? r.date : m, recs[0].date);
+            const kline = await fetchKlineWindow(symbol, minDate, 5, daysBetween2(minDate, today) + 5);
+            if (kline?.length) {
+                recs.forEach(rec => {
+                    const idx = updated.findIndex(r => r.symbol === rec.symbol && r.date === rec.date);
+                    if (idx >= 0) updated[idx] = backfillRecord(updated[idx], kline);
+                });
+            }
+            done++;
+        }
+        setBackfillProgress({ done: total, total });
+        saveSignalLog(updated);
+        setLog(updated);
+        setBackfilling(false);
+    };
+
+    /** 各燈號成效統計（各天期報酬中位數＋20 日勝率） */
+    const stats = useMemo(() => {
+        if (!log.length) return null;
+        const bySignal = new Map<string, SignalRecord[]>();
+        log.forEach(r => {
+            const list = bySignal.get(r.signal) ?? [];
+            list.push(r);
+            bySignal.set(r.signal, list);
+        });
+        return [...bySignal.entries()].map(([signal, list]) => {
+            const med = (get: (r: SignalRecord) => number | null | undefined) =>
+                median(list.map(get).filter((v): v is number => v != null));
+            const d20 = list.map(r => r.fwd?.d20).filter((v): v is number => v != null);
+            return {
+                signal, n: list.length,
+                nFilled: list.filter(r => r.fwd?.d5 != null).length,
+                d5: med(r => r.fwd?.d5), d10: med(r => r.fwd?.d10), d20: med(r => r.fwd?.d20), d30: med(r => r.fwd?.d30),
+                upRate20: d20.length ? d20.filter(v => v > 0).length / d20.length * 100 : null,
+            };
+        }).sort((a, b) => b.n - a.n);
+    }, [log]);
+
+    const recent = useMemo(() => [...log].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50), [log]);
+    const fmtR = (v: number | null | undefined) => v == null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
+    const rCls = (v: number | null | undefined) => v == null ? 'text-slate-600' : v >= 0 ? 'text-red-400' : 'text-emerald-400';
+
+    return (
+        <div className="space-y-5">
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div>
+                        <span className="text-sm font-bold text-slate-200">⑨ 訊號成效持續追蹤</span>
+                        <span className="ml-2 text-[11px] text-slate-500">即時分析每發出一個非中性燈號自動記錄，這裡回填發訊後 5/10/20/30 個交易日的實際報酬</span>
+                    </div>
+                    <div className="ml-auto flex items-center gap-2">
+                        {backfillProgress && backfilling && <span className="text-xs text-slate-400">{backfillProgress.done}/{backfillProgress.total} 標的</span>}
+                        <button onClick={handleBackfill} disabled={backfilling || !pending.length}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold bg-violet-600 hover:bg-violet-500 text-white border border-violet-500 disabled:opacity-40 flex items-center gap-1.5 transition-all">
+                            {backfilling ? <><Loader2 size={12} className="animate-spin" />回填中…</> : `回填報酬（待回填 ${pending.length} 筆）`}
+                        </button>
+                    </div>
+                </div>
+                {!log.length ? (
+                    <div className="text-center py-12 text-slate-500 text-sm space-y-1">
+                        <p>尚無訊號紀錄</p>
+                        <p className="text-xs text-slate-600">到「股票投資」或「選股掃描」執行技術面分析後，非中性燈號會自動記錄於此，從今天起累積</p>
+                    </div>
+                ) : (
+                    <>
+                        {log.length < 30 && (
+                            <div className="text-[11px] px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                                累積中：目前僅 {log.length} 筆訊號紀錄（n&lt;30），統計僅供參考；訊號從開始記錄日起累積，歷史無法回補。
+                            </div>
+                        )}
+                        {stats && (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="text-slate-600 border-b border-slate-700 text-left">
+                                            <th className="pb-1.5 px-3">燈號</th>
+                                            <th className="pb-1.5 px-3 text-center">筆數（已回填）</th>
+                                            <th className="pb-1.5 px-3 text-center">+5日</th>
+                                            <th className="pb-1.5 px-3 text-center">+10日</th>
+                                            <th className="pb-1.5 px-3 text-center">+20日</th>
+                                            <th className="pb-1.5 px-3 text-center">+30日</th>
+                                            <th className="pb-1.5 px-3 text-center">20日上漲率</th>
+                                            <th className="pb-1.5 px-3 text-left">預期方向</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {stats.map(s => (
+                                            <tr key={s.signal} className="border-t border-slate-700/40">
+                                                <td className="py-2 px-3 font-medium text-slate-300">{SIGNAL_LABELS[s.signal] ?? s.signal}</td>
+                                                <td className="py-2 px-3 text-center text-slate-400">{s.n}（{s.nFilled}）</td>
+                                                <td className={`py-2 px-3 text-center font-mono ${rCls(s.d5)}`}>{fmtR(s.d5)}</td>
+                                                <td className={`py-2 px-3 text-center font-mono ${rCls(s.d10)}`}>{fmtR(s.d10)}</td>
+                                                <td className={`py-2 px-3 text-center font-mono ${rCls(s.d20)}`}>{fmtR(s.d20)}</td>
+                                                <td className={`py-2 px-3 text-center font-mono ${rCls(s.d30)}`}>{fmtR(s.d30)}</td>
+                                                <td className="py-2 px-3 text-center text-slate-400">{s.upRate20 !== null ? `${s.upRate20.toFixed(0)}%` : '—'}</td>
+                                                <td className="py-2 px-3 text-[11px] text-slate-500">{BUY_DIRECTION_SIGNALS.has(s.signal) ? '應上漲（報酬為正＝有預測力）' : '應偏弱（報酬為負＝有預測力）'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                        <div className="pt-3 border-t border-slate-700/60">
+                            <div className="text-[11px] text-slate-500 mb-2">最近 50 筆訊號紀錄</div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs">
+                                    <thead>
+                                        <tr className="text-slate-600 border-b border-slate-700 text-left">
+                                            <th className="pb-1.5 px-3">發訊日</th>
+                                            <th className="pb-1.5 px-3">標的</th>
+                                            <th className="pb-1.5 px-3">分類</th>
+                                            <th className="pb-1.5 px-3">燈號</th>
+                                            <th className="pb-1.5 px-3 text-right">發訊價</th>
+                                            <th className="pb-1.5 px-3 text-center">+5日</th>
+                                            <th className="pb-1.5 px-3 text-center">+10日</th>
+                                            <th className="pb-1.5 px-3 text-center">+20日</th>
+                                            <th className="pb-1.5 px-3 text-center">+30日</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {recent.map(r => (
+                                            <tr key={`${r.symbol}|${r.date}`} className="border-t border-slate-700/30">
+                                                <td className="py-1.5 px-3 text-slate-400">{r.date}</td>
+                                                <td className="py-1.5 px-3 text-slate-300 font-mono">{r.symbol}</td>
+                                                <td className="py-1.5 px-3 text-slate-400">{r.category}</td>
+                                                <td className="py-1.5 px-3 text-slate-300">{SIGNAL_LABELS[r.signal] ?? r.signal}</td>
+                                                <td className="py-1.5 px-3 text-right font-mono text-slate-300">{r.price}</td>
+                                                <td className={`py-1.5 px-3 text-center font-mono ${rCls(r.fwd?.d5)}`}>{fmtR(r.fwd?.d5)}</td>
+                                                <td className={`py-1.5 px-3 text-center font-mono ${rCls(r.fwd?.d10)}`}>{fmtR(r.fwd?.d10)}</td>
+                                                <td className={`py-1.5 px-3 text-center font-mono ${rCls(r.fwd?.d20)}`}>{fmtR(r.fwd?.d20)}</td>
+                                                <td className={`py-1.5 px-3 text-center font-mono ${rCls(r.fwd?.d30)}`}>{fmtR(r.fwd?.d30)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <p className="text-[11px] text-slate-600">
+                            報酬以發訊當下顯示價為基準、依交易日計算；發訊未滿對應天數的欄位顯示「—」，之後再按回填即可補上。已回填的數字為快照、不再重算。
+                        </p>
                     </>
                 )}
             </div>
@@ -2601,7 +2786,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
     const [sortKey, setSortKey] = useState<SortKey>('trades');
     const [sortAsc, setSortAsc] = useState(false);
     const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
-    const [activeSection, setActiveSection] = useState<'winrate' | 'optimal' | 'exit' | 'divergence' | 'forward' | 'backtest' | 'summary'>('winrate');
+    const [activeSection, setActiveSection] = useState<'winrate' | 'optimal' | 'exit' | 'divergence' | 'forward' | 'backtest' | 'summary' | 'tracker'>('winrate');
 
     const OPTIMAL_CACHE_KEY = 'ft_dsslab_optimal_cache';
     const EXIT_CACHE_KEY = 'ft_dsslab_exit_cache';
@@ -2969,6 +3154,7 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                     { key: 'forward', label: '前瞻報酬', icon: TrendingUp },
                     { key: 'backtest', label: 'DSS 回測分析', icon: History },
                     { key: 'summary', label: '分析摘要', icon: ClipboardList },
+                    { key: 'tracker', label: '訊號成效', icon: Activity },
                 ] as const).map(({ key, label, icon: Icon }) => (
                     <button key={key} onClick={() => setActiveSection(key)}
                         className={`flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-t-lg transition-colors ${activeSection === key ? 'bg-slate-800/50 text-violet-400 border-b-2 border-violet-400' : 'text-slate-500 hover:text-slate-300'}`}>
@@ -3007,6 +3193,8 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
 
             {activeSection === 'backtest' ? (
                 <BacktestView allTransactions={stockTransactions} filteredTransactions={stockTransactions} />
+            ) : activeSection === 'tracker' ? (
+                <SignalTrackerSection />
             ) : allCompleted.length === 0 ? (
                 <div className="text-center py-20 text-slate-500">
                     <FlaskConical size={40} className="mx-auto mb-3 opacity-30" />

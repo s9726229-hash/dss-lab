@@ -176,9 +176,13 @@ const DSSLabParamGuide: React.FC = () => (
                         <b className="text-slate-300">⑧ 保守模式回測（已完成，2026-07-14）</b><br />
                         以 TAIEX 歷史收盤重建每筆進場日的大盤狀態，模擬「保守日只允許強買」政策。<b className="text-amber-400">保守日進場僅 9 筆（254 筆中），樣本不足以下統計結論</b>；且這 9 筆全數未達強買門檻（政策下會全被擋），實際報酬中位數 +38.2%、勝率 100%，方向上反而不支持收緊。<b className="text-red-300">結論：維持現行「保守模式僅警示、不阻斷買進」</b>。
                     </div>
+                    <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                        <b className="text-slate-300">⑨ 訊號成效持續追蹤（機制已建置，2026-07-14）</b><br />
+                        即時分析每發出一個非中性主燈號自動記錄（同代號同日去重），DSS 實驗室「訊號成效」分頁可手動回填發訊後 5/10/20/30 個交易日的實際報酬，統計各燈號預測力。<b className="text-amber-400">訊號從建置日起累積、歷史無法回補，需累積數週（n≥30）後統計才有參考價值</b>。
+                    </div>
                     <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-600/30 opacity-60">
-                        <b className="text-slate-400">第三階段（進行中，⑦⑧已完成）</b><br />
-                        訊號成效持續追蹤、參數版本化。
+                        <b className="text-slate-400">第三階段（進行中，⑦⑧⑨已完成）</b><br />
+                        ⑩ 參數版本化（不同 DSSProfile 互比績效）。
                     </div>
                 </div>
                 <p className="text-[11px] text-slate-500">詳細數字見 DSS 實驗室 → <b>分析摘要</b> 分頁。</p>

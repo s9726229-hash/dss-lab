@@ -1,6 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Asset, Currency, StockPerformanceResult, StockTransaction, Transaction, TechDataResult, MarketRegime, RiskAlerts, SignalHint, TechParameters, BacktestResult } from "../types";
 import { getApiKey, getFeeDiscount, getTechParameters, getFinMindToken } from "./storage";
+import { logSignal } from "./signalTracker";
 
 const cleanJsonString = (text: string) => {
     if (!text) return "{}";
@@ -1044,6 +1045,9 @@ export const fetchTechnicalData = async (symbol: string, assets?: Asset[], trans
         if (!signalHint && techSignal !== 'NONE') {
             signalHint = buildTriggerConditions();
         }
+
+        // ⑨ 訊號成效追蹤：非中性主燈號寫入訊號紀錄（同代號同日去重）
+        logSignal(symbol, techSignal, sizeCategory, currentPrice);
 
         return {
             ma20: currentMa20,

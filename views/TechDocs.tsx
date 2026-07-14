@@ -168,9 +168,13 @@ const DSSLabParamGuide: React.FC = () => (
                         <b className="text-slate-300">⑥ 籌碼覆寫規則增量分析（已完成，2026-07-14）</b><br />
                         依進場時外資連買／投信連買／融資連增天數分桶，比較各組報酬中位數與勝率。<b className="text-red-300">共振升級（外資+投信連買）跨類別方向不一致，無穩健支撐</b>（上櫃外資連買≥3天反而低於0天5.6pp）；<b className="text-amber-400">融資連增背離降級有一定效果</b>，上市勝率在融資連增≥3天時從82%降至56%（-26pp），ETF報酬也降約9pp，但上櫃方向不一致。建議上市保留融資連增降級規則，共振升級規則效果存疑可考慮降低門檻。
                     </div>
+                    <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                        <b className="text-slate-300">⑦ Bias 門檻波動自適應 z-score（已完成，2026-07-14）</b><br />
+                        將 Bias20 依各股近 60 日波動標準化為 z-score，與固定百分比門檻做訓練/驗證期對比（門檻皆取訓練期最佳進場日中位數）。<b className="text-red-300">z-score 規則在三個類別的驗證期改善率全數不優於固定門檻</b>（ETF -3.1pp、上市 -5.0pp、上櫃固定門檻優 7.0pp）。<b className="text-red-300">結論：無增量價值，維持固定百分比門檻</b>。z 分桶描述上「z≤-1 深跌組」報酬較高（上市 +28.5% vs 全體 +8%），但轉成規則後泛化不如固定門檻，不採用。
+                    </div>
                     <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-600/30 opacity-60">
-                        <b className="text-slate-400">第三階段（未開始）</b><br />
-                        Bias 門檻改波動自適應 z-score、保守模式回測、訊號成效持續追蹤、參數版本化。
+                        <b className="text-slate-400">第三階段（進行中，⑦已完成）</b><br />
+                        保守模式回測、訊號成效持續追蹤、參數版本化。
                     </div>
                 </div>
                 <p className="text-[11px] text-slate-500">詳細數字見 DSS 實驗室 → <b>分析摘要</b> 分頁。</p>

@@ -257,6 +257,65 @@ const ParamDiagnosisSummary: React.FC<{ optimalResults: WindowResult[] | null }>
         }>);
     }, [optimalResults]);
 
+    /** ⑦ Bias 門檻波動自適應 z-score：z 分桶描述 ＋ 固定門檻 vs z-score 規則的訓練/驗證期對比 */
+    const zAnalysis = useMemo(() => {
+        if (!optimalResults?.length) return null;
+        const indicatorMap = buildSymbolIndicatorMap(loadDSSLabRawCache());
+        if (!indicatorMap.size) return null;
+        const zAt = (sym: string, date: string): number | null =>
+            indicatorMap.get(sym)?.find(r => r.date === date)?.zBias20 ?? null;
+        type GS = { n: number; medReturn: number | null; winRate: number | null };
+        const grp = (list: WindowResult[]): GS => ({
+            n: list.length,
+            medReturn: median(list.map(t => t.actualReturn)),
+            winRate: list.length ? list.filter(t => t.actualReturn > 0).length / list.length * 100 : null,
+        });
+        const out = {} as Record<'ETF' | '上市' | '上櫃', {
+            buckets: { b1: GS; b2: GS; b3: GS; b4: GS } | null;
+            rules: {
+                cutoffDate: string | null;
+                fixedThreshold: number;
+                zThreshold: number;
+                fixed: { train: SplitRuleMetric; val: SplitRuleMetric };
+                zscore: { train: SplitRuleMetric; val: SplitRuleMetric };
+            } | null;
+        } | null>;
+        cats.forEach(cat => {
+            const catList = optimalResults.filter(r => r.category === cat);
+            const withZ = catList
+                .map(r => ({ r, z: zAt(r.symbol, r.buyDate) }))
+                .filter((x): x is { r: WindowResult; z: number } => x.z !== null);
+            const buckets = withZ.length >= 5 ? {
+                b1: grp(withZ.filter(x => x.z <= -2).map(x => x.r)),
+                b2: grp(withZ.filter(x => x.z > -2 && x.z <= -1).map(x => x.r)),
+                b3: grp(withZ.filter(x => x.z > -1 && x.z <= 0).map(x => x.r)),
+                b4: grp(withZ.filter(x => x.z > 0).map(x => x.r)),
+            } : null;
+            // 門檻皆來自訓練期「最佳進場日」的中位數，兩規則對等比較（與現行參數反推來源一致）
+            const split = splitByDate(catList, r => r.buyDate);
+            const fixedThreshold = median(split.train.map(r => r.bestBias20).filter(notNull));
+            const zThreshold = median(split.train.map(r => zAt(r.symbol, r.bestDate)).filter(notNull));
+            let rules: NonNullable<typeof out[typeof cat]>['rules'] = null;
+            if (fixedThreshold !== null && zThreshold !== null && split.val.length) {
+                const simReturn = (t: WindowResult, d: DailyIndicatorRow) =>
+                    t.sellPrice > 0 && d.close > 0 ? ((t.sellPrice - d.close) / d.close) * 100 : null;
+                const evalRule = (q: (d: DailyIndicatorRow) => boolean) => ({
+                    train: evalRuleOnTrades(split.train, indicatorMap, t => t.buyDate, q, simReturn, t => t.actualReturn),
+                    val: evalRuleOnTrades(split.val, indicatorMap, t => t.buyDate, q, simReturn, t => t.actualReturn),
+                });
+                rules = {
+                    cutoffDate: split.cutoffDate,
+                    fixedThreshold,
+                    zThreshold,
+                    fixed: evalRule(d => d.bias20 !== null && d.bias20 <= fixedThreshold),
+                    zscore: evalRule(d => d.zBias20 !== null && d.zBias20 <= zThreshold),
+                };
+            }
+            out[cat] = (buckets || rules) ? { buckets, rules } : null;
+        });
+        return (out.ETF || out.上市 || out.上櫃) ? out : null;
+    }, [optimalResults]);
+
     const fmtRet = (v: number | null) => v === null ? '—' : `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`;
     const fmtWR = (v: number | null) => v === null ? '—' : `${v.toFixed(0)}%`;
     const retCls = (v: number | null) => v === null ? 'text-slate-600' : v >= 0 ? 'text-red-400' : 'text-emerald-400';
@@ -417,6 +476,120 @@ const ParamDiagnosisSummary: React.FC<{ optimalResults: WindowResult[] | null }>
                     );
                 })}
                 <p className="text-[11px] text-slate-600">外資/投信連買≥3天組報酬若明顯高於0天組 → 共振升級有效；融資連增≥3天組報酬若偏低 → 背離降級有效。</p>
+            </div>
+
+            {/* ⑦ z-score */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-5 space-y-4">
+                <div>
+                    <span className="text-sm font-bold text-slate-300">⑦ Bias 門檻波動自適應 z-score 增量分析</span>
+                    <span className="ml-2 text-[11px] text-slate-500">z ＝（當日 Bias20 − 近{Z_WINDOW}日均）÷ 近{Z_WINDOW}日標準差；驗證固定百分比門檻是否該改為波動標準化門檻</span>
+                </div>
+                {!zAnalysis ? (
+                    <div className="text-xs text-slate-500 py-4 text-center">找不到原始資料快取或樣本不足，請重新執行「開始分析」</div>
+                ) : (
+                    <>
+                        <div className="overflow-x-auto">
+                            <div className="text-[11px] text-slate-500 mb-1">進場日 z 分桶 × 實際報酬（描述性）</div>
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-slate-600 border-b border-slate-700">
+                                        <th className="pb-1.5 px-3 text-left">類別</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>z ≤ −2</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>−2 &lt; z ≤ −1</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>−1 &lt; z ≤ 0</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>z &gt; 0</th>
+                                    </tr>
+                                    <tr className="text-slate-700 border-b border-slate-700/40 text-[10px]">
+                                        <th className="pb-1 px-3"></th>
+                                        {['n','報酬','勝率','n','報酬','勝率','n','報酬','勝率','n','報酬','勝率'].map((h,i) => <th key={i} className="pb-1 px-3 text-center">{h}</th>)}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {cats.map(cat => {
+                                        const b = zAnalysis[cat]?.buckets;
+                                        const ZCell = ({ gs }: { gs: { n: number; medReturn: number | null; winRate: number | null } }) => (<>
+                                            <td className="py-2 px-3 text-center text-slate-400">{gs.n}</td>
+                                            <td className={`py-2 px-3 text-center font-mono ${gs.n < 5 ? 'text-slate-600' : retCls(gs.medReturn)}`}>{gs.n < 5 ? '(n<5)' : fmtRet(gs.medReturn)}</td>
+                                            <td className="py-2 px-3 text-center text-slate-400">{gs.n < 5 ? '—' : fmtWR(gs.winRate)}</td>
+                                        </>);
+                                        return (
+                                            <tr key={cat} className="border-t border-slate-700/40">
+                                                <td className="py-2 px-3 font-semibold text-slate-300">{cat}</td>
+                                                {b ? <><ZCell gs={b.b1} /><ZCell gs={b.b2} /><ZCell gs={b.b3} /><ZCell gs={b.b4} /></>
+                                                   : <td colSpan={12} className="py-2 px-3 text-center text-slate-600">樣本不足</td>}
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <div className="text-[11px] text-slate-500 mb-1">固定門檻 vs z-score 規則對比（門檻皆取訓練期最佳進場日中位數，套到 ±{WINDOW_DAYS} 日視窗評估改善率）</div>
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-slate-600 border-b border-slate-700">
+                                        <th className="pb-1.5 px-3 text-left">類別</th>
+                                        <th className="pb-1.5 px-3 text-left">規則</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>訓練期</th>
+                                        <th className="pb-1.5 px-3 text-center" colSpan={3}>驗證期</th>
+                                        <th className="pb-1.5 px-3 text-left">判斷</th>
+                                    </tr>
+                                    <tr className="text-slate-700 border-b border-slate-700/40 text-[10px]">
+                                        <th className="pb-1 px-3"></th><th className="pb-1 px-3"></th>
+                                        {['有訊號','改善率','勝率','有訊號','改善率','勝率'].map((h,i) => <th key={i} className="pb-1 px-3 text-center">{h}</th>)}
+                                        <th></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {cats.map(cat => {
+                                        const r = zAnalysis[cat]?.rules;
+                                        if (!r) return (
+                                            <tr key={cat} className="border-t border-slate-700/40">
+                                                <td className="py-2 px-3 font-semibold text-slate-300">{cat}</td>
+                                                <td colSpan={8} className="py-2 px-3 text-slate-600">訓練/驗證切分後樣本不足，無法對比</td>
+                                            </tr>
+                                        );
+                                        const impCls = (v: number | null) => v === null ? 'text-slate-600' : v > 0 ? 'text-red-400' : 'text-emerald-400';
+                                        const MCells = ({ m }: { m: SplitRuleMetric }) => (<>
+                                            <td className="py-2 px-3 text-center text-slate-400">{m.nWithSignal}/{m.nWithData}</td>
+                                            <td className={`py-2 px-3 text-center font-mono ${impCls(m.medImprovement)}`}>{m.medImprovement !== null ? `${m.medImprovement >= 0 ? '+' : ''}${m.medImprovement.toFixed(2)}%` : '—'}</td>
+                                            <td className="py-2 px-3 text-center text-slate-400">{fmtWR(m.winRate)}</td>
+                                        </>);
+                                        const dv = r.zscore.val.medImprovement !== null && r.fixed.val.medImprovement !== null
+                                            ? r.zscore.val.medImprovement - r.fixed.val.medImprovement : null;
+                                        const valInsufficient = r.zscore.val.nWithSignal < 5 || r.fixed.val.nWithSignal < 5;
+                                        return (
+                                            <React.Fragment key={cat}>
+                                                <tr className="border-t border-slate-700/40">
+                                                    <td rowSpan={2} className="py-2 px-3 font-semibold text-slate-300 align-top">{cat}</td>
+                                                    <td className="py-2 px-3 text-slate-400">固定 Bias20 ≤ {r.fixedThreshold.toFixed(1)}%</td>
+                                                    <MCells m={r.fixed.train} />
+                                                    <MCells m={r.fixed.val} />
+                                                    <td rowSpan={2} className="py-2 px-3 text-[11px] align-top">
+                                                        {valInsufficient ? <span className="text-slate-500">驗證期樣本不足</span>
+                                                            : dv === null ? <span className="text-slate-500">—</span>
+                                                            : dv > 5 ? <span className="text-red-400">z-score 優 {dv.toFixed(1)}pp</span>
+                                                            : dv < -5 ? <span className="text-emerald-400">固定門檻優 {(-dv).toFixed(1)}pp</span>
+                                                            : <span className="text-slate-500">差距 {dv.toFixed(1)}pp，無明顯增量</span>}
+                                                    </td>
+                                                </tr>
+                                                <tr className="border-t border-slate-700/20">
+                                                    <td className="py-2 px-3 text-slate-400">z-score z ≤ {r.zThreshold.toFixed(2)}</td>
+                                                    <MCells m={r.zscore.train} />
+                                                    <MCells m={r.zscore.val} />
+                                                </tr>
+                                            </React.Fragment>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p className="text-[11px] text-slate-600">
+                            z-score 把 Bias20 依各股自身近{Z_WINDOW}日波動標準化：高波動股的 −3% 可能只是 z≈−0.5（家常便飯），低波動 ETF 的 −3% 可能是 z≈−2.5（罕見超跌）。
+                            若 z-score 規則驗證期改善率未明顯優於固定門檻（差距 ≤5pp）→ 無增量價值，維持固定百分比門檻。
+                        </p>
+                    </>
+                )}
             </div>
 
             {/* 綜合建議 */}
@@ -993,7 +1166,11 @@ const splitByDate = <T,>(list: T[], getDate: (t: T) => string): DateSplit<T> => 
 
 /** 每日指標列：Bias20 / RSI14 計算方式與 computeDSSForDate 一致（Wilder RSI 以序列起點為種子），
  *  用單次滾動計算取代逐日呼叫 computeDSSForDate，供驗證期檢驗與前瞻報酬分析共用 */
-interface DailyIndicatorRow { date: string; close: number; bias20: number | null; rsi: number | null; }
+interface DailyIndicatorRow { date: string; close: number; bias20: number | null; rsi: number | null; zBias20: number | null; }
+
+/** ⑦ z-score 滾動視窗：以最近 Z_WINDOW 個交易日的 Bias20 平均/標準差做標準化，至少要 Z_MIN_SAMPLES 筆才計算 */
+const Z_WINDOW = 60;
+const Z_MIN_SAMPLES = 30;
 
 const buildDailyIndicators = (kline: { date: string; close: number }[]): DailyIndicatorRow[] => {
     const rows: DailyIndicatorRow[] = [];
@@ -1022,7 +1199,20 @@ const buildDailyIndicators = (kline: { date: string; close: number }[]): DailyIn
             const ma20 = sum / 20;
             bias20 = ma20 !== 0 ? ((close - ma20) / ma20) * 100 : null;
         }
-        rows.push({ date, close, bias20, rsi });
+        rows.push({ date, close, bias20, rsi, zBias20: null });
+    }
+    // 第二遍：Bias20 的滾動 z-score（以最近 Z_WINDOW 個交易日的 Bias20 平均/標準差標準化）
+    for (let i = 0; i < rows.length; i++) {
+        if (rows[i].bias20 === null) continue;
+        const window: number[] = [];
+        for (let j = Math.max(0, i - Z_WINDOW + 1); j <= i; j++) {
+            const b = rows[j].bias20;
+            if (b !== null) window.push(b);
+        }
+        if (window.length < Z_MIN_SAMPLES) continue;
+        const mean = window.reduce((s, v) => s + v, 0) / window.length;
+        const sd = Math.sqrt(window.reduce((s, v) => s + (v - mean) ** 2, 0) / window.length);
+        if (sd > 0) rows[i].zBias20 = (rows[i].bias20! - mean) / sd;
     }
     return rows;
 };

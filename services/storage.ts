@@ -1,5 +1,6 @@
 import { STORAGE_KEYS } from '../constants';
 import { Asset, Transaction, RecurringItem, PortfolioSnapshot, BudgetConfig, StockSnapshot, StockTransaction } from '../types';
+import { getSignalLog, saveSignalLog, SignalRecord } from './signalTracker';
 
 export const getAssets = (): Asset[] => {
   const data = localStorage.getItem(STORAGE_KEYS.ASSETS);
@@ -277,6 +278,8 @@ export const getFullDataJson = () => {
         'ft_finmind_token': getFinMindToken(),
         'ft_google_client_id': getGoogleClientId(),
         [STORAGE_KEYS.FEE_DISCOUNT]: getFeeDiscount(),
+        'ft_dss_profiles': getDSSProfiles(),
+        'ft_dsslab_signal_log': getSignalLog(),
     };
     return JSON.stringify(data, null, 2);
 };
@@ -336,6 +339,8 @@ export const importData = (jsonData: string) => {
     if (data['ft_finmind_token']) saveFinMindToken(data['ft_finmind_token']);
     if (data['ft_google_client_id']) saveGoogleClientId(data['ft_google_client_id']);
     if (data[STORAGE_KEYS.FEE_DISCOUNT]) saveFeeDiscount(data[STORAGE_KEYS.FEE_DISCOUNT]);
+    if (data['ft_dss_profiles']) saveDSSProfiles(data['ft_dss_profiles']);
+    if (data['ft_dsslab_signal_log']) saveSignalLog(data['ft_dsslab_signal_log'] as SignalRecord[]);
 
     return true;
   } catch (e) {

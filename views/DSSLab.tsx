@@ -17,6 +17,28 @@ const WINDOW_DAYS = 10;
  *  同時對齊 DSS 回測分析(runBacktest)的 95 天緩衝需求，讓兩邊可共用同一份原始資料快取 */
 const MIN_HISTORY_BUFFER_DAYS = 95;
 
+/** 分頁分組：第一層是大分類，第二層是組內子分頁（依實際分析流程排序：進場→前瞻驗證→出場→時點偏移） */
+type SectionKey = 'winrate' | 'optimal' | 'exit' | 'divergence' | 'forward' | 'backtest' | 'summary' | 'tracker' | 'params';
+const TAB_GROUPS: { key: string; label: string; tabs: { key: SectionKey; label: string; icon: typeof Trophy }[] }[] = [
+    { key: 'overview', label: '標的總覽', tabs: [
+        { key: 'winrate', label: '標的勝率排行', icon: Trophy },
+    ] },
+    { key: 'reverse', label: '參數反推分析', tabs: [
+        { key: 'optimal', label: '進場分析', icon: Zap },
+        { key: 'forward', label: '前瞻報酬', icon: TrendingUp },
+        { key: 'exit', label: '出場分析', icon: Target },
+        { key: 'divergence', label: '時點偏移分析', icon: BarChart2 },
+    ] },
+    { key: 'verify', label: '訊號驗證', tabs: [
+        { key: 'backtest', label: '回測吻合分析', icon: History },
+        { key: 'tracker', label: '訊號成效追蹤', icon: Activity },
+    ] },
+    { key: 'params', label: '參數建議', tabs: [
+        { key: 'params', label: '參數建議', icon: SlidersHorizontal },
+        { key: 'summary', label: '驗證明細', icon: ClipboardList },
+    ] },
+];
+
 interface SymbolStats {
     symbol: string;
     name?: string;
@@ -949,8 +971,8 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
         <div className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden">
             <div className="p-4 border-b border-slate-700 flex items-center gap-2">
                 <Zap size={16} className="text-amber-400" />
-                <h3 className="text-sm font-bold text-slate-200">±N日最佳進場分析</h3>
-                <span className="text-xs text-slate-500 ml-1">若改在附近最低價入場，報酬率可提升多少？</span>
+                <h3 className="text-sm font-bold text-slate-200">進場分析</h3>
+                <span className="text-xs text-slate-500 ml-1">依訓練期最佳進場點反推的參數建議與驗證結果</span>
             </div>
             <div className="p-4 space-y-4">
                 {!results && (
@@ -958,114 +980,13 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                 )}
                 {results && (
                     <>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                            <div className="bg-slate-900/60 rounded-xl p-3 text-center">
-                                <div className="text-xs text-slate-400 mb-1">平均可改善報酬</div>
-                                <div className={`text-lg font-bold ${(avgImprovement ?? 0) > 0 ? 'text-red-400' : 'text-slate-300'}`}>
-                                    {avgImprovement !== null ? `+${avgImprovement.toFixed(2)}%` : '-'}
-                                </div>
-                                <div className="text-[10px] text-slate-500">全部交易</div>
-                            </div>
-                            <div className="bg-slate-900/60 rounded-xl p-3 text-center">
-                                <div className="text-xs text-slate-400 mb-1">可顯著改善筆數</div>
-                                <div className="text-lg font-bold text-amber-400">{couldImprove} / {results.length}</div>
-                                <div className="text-[10px] text-slate-500">改善 &gt; 0.5%</div>
-                            </div>
-                            <div className="bg-emerald-900/30 border border-emerald-800/40 rounded-xl p-3 text-center">
-                                <div className="text-xs text-emerald-400 mb-1">虧損交易筆數</div>
-                                <div className="text-lg font-bold text-emerald-400">{losers.length}</div>
-                                <div className="text-[10px] text-slate-500">實際負報酬</div>
-                            </div>
-                            <div className="bg-emerald-900/30 border border-emerald-800/40 rounded-xl p-3 text-center">
-                                <div className="text-xs text-emerald-400 mb-1">虧損平均可減少</div>
-                                <div className={`text-lg font-bold ${(avgLossReduction ?? 0) > 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                                    {avgLossReduction !== null ? `+${avgLossReduction.toFixed(2)}%` : '-'}
-                                </div>
-                                <div className="text-[10px] text-slate-500">提早/延後進場</div>
-                            </div>
-                            <div className="bg-emerald-900/30 border border-emerald-800/40 rounded-xl p-3 text-center">
-                                <div className="text-xs text-emerald-400 mb-1">可轉為獲利</div>
-                                <div className="text-lg font-bold text-red-400">{lossAvoided} 筆</div>
-                                <div className="text-[10px] text-slate-500">最佳日報酬 ≥ 0</div>
-                            </div>
+                        <div className="text-xs text-slate-300 bg-sky-500/10 border border-sky-500/30 rounded-lg px-3 py-2 leading-relaxed">
+                            <b className="text-sky-300">這裡在做什麼：</b>回頭看你過去 {results.length} 筆真實交易，找出「如果在附近最佳時機進場，報酬能提升多少」，用這個反推出建議的乖離率/RSI門檻。下面依序是：① 建議門檻 ② 這個門檻放到近期沒看過的交易上準不準（驗證期檢驗）③ 額外加RSI/斜率/籌碼條件有沒有用（可展開看細節）。
                         </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead><tr className="text-xs text-slate-400 border-b border-slate-700">
-                                    <th className="py-2 px-3">標的</th>
-                                    <th className="py-2 px-3 text-center">進場日</th>
-                                    <th className="py-2 px-3 text-center">出場日</th>
-                                    <th className="py-2 px-3 text-right">實際買入</th>
-                                    <th className="py-2 px-3 text-right">實際報酬</th>
-                                    <th className="py-2 px-3 text-center text-sky-400">B5</th>
-                                    <th className="py-2 px-3 text-center text-violet-400">B10</th>
-                                    <th className="py-2 px-3 text-center text-slate-400">B20</th>
-                                    <th className="py-2 px-3 text-center">最佳日（偏移）</th>
-                                    <th className="py-2 px-3 text-right">最佳價格</th>
-                                    <th className="py-2 px-3 text-right">最佳報酬</th>
-                                    <th className="py-2 px-3 text-center text-sky-400">最佳B5</th>
-                                    <th className="py-2 px-3 text-center text-violet-400">最佳B10</th>
-                                    <th className="py-2 px-3 text-center text-slate-400">最佳B20</th>
-                                    <th className="py-2 px-3 text-center text-amber-400">最佳RSI</th>
-                                    <th className="py-2 px-3 text-center text-amber-400">最佳斜率</th>
-                                    <th className="py-2 px-3 text-center text-amber-400">最佳外資</th>
-                                    <th className="py-2 px-3 text-center text-amber-400">最佳投信</th>
-                                    <th className="py-2 px-3 text-center text-amber-400">最佳融資</th>
-                                    <th className="py-2 px-3 text-right">可改善</th>
-                                </tr></thead>
-                                <tbody>
-                                    {results.slice(0, 50).map((r, i) => (
-                                        <tr key={i} className={`border-t border-slate-700/30 transition-colors ${r.actualReturn < 0 ? 'bg-emerald-950/20 hover:bg-emerald-950/30' : 'hover:bg-slate-700/10'}`}>
-                                            <td className="py-2 px-3 text-sm">
-                                                <div className="font-medium text-white">{r.name ?? r.symbol}</div>
-                                                <div className="text-xs text-slate-500">{r.symbol}</div>
-                                            </td>
-                                            <td className="py-2 px-3 text-center text-xs text-slate-400">{r.buyDate}</td>
-                                            <td className="py-2 px-3 text-center text-xs text-slate-400">{r.sellDate}</td>
-                                            <td className="py-2 px-3 text-right font-mono text-sm text-slate-300">{r.actualBuyPrice}</td>
-                                            <td className="py-2 px-3 text-right font-mono text-sm">
-                                                <span className={r.actualReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}>
-                                                    {r.actualReturn >= 0 ? '+' : ''}{r.actualReturn.toFixed(2)}%
-                                                </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-sky-400">{r.actualBias5 !== null ? `${r.actualBias5.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-violet-400">{r.actualBias10 !== null ? `${r.actualBias10.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-slate-400">{r.actualBias20 !== null ? `${r.actualBias20.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center text-xs">
-                                                <span className="text-slate-300">{r.bestDate}</span>
-                                                <span className={`ml-1 ${r.dayOffset > 0 ? 'text-sky-400' : r.dayOffset < 0 ? 'text-amber-400' : 'text-slate-500'}`}>
-                                                    {r.dayOffset > 0 ? `(早 ${r.dayOffset}天)` : r.dayOffset < 0 ? `(晚 ${Math.abs(r.dayOffset)}天)` : '(同日)'}
-                                                </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-right font-mono text-sm text-slate-300">{r.bestPrice}</td>
-                                            <td className="py-2 px-3 text-right font-mono text-sm">
-                                                <span className={r.bestReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}>
-                                                    {r.bestReturn >= 0 ? '+' : ''}{r.bestReturn.toFixed(2)}%
-                                                </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-sky-400">{r.bestBias5 !== null ? `${r.bestBias5.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-violet-400">{r.bestBias10 !== null ? `${r.bestBias10.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-slate-400">{r.bestBias20 !== null ? `${r.bestBias20.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestRsi != null ? r.bestRsi.toFixed(1) : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestSlopeUpDays != null ? `${r.bestSlopeUpDays}天` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestForeignConsecBuy != null ? `${r.bestForeignConsecBuy}天` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestTrustConsecBuy != null ? `${r.bestTrustConsecBuy}天` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestMarginConsecIncrease != null ? `${r.bestMarginConsecIncrease}天` : '-'}</td>
-                                            <td className="py-2 px-3 text-right font-mono text-sm font-bold">
-                                                <span className={r.improvement > 0.5 ? 'text-amber-400' : r.improvement > 0 ? 'text-slate-300' : 'text-slate-500'}>
-                                                    {r.improvement > 0 ? '+' : ''}{r.improvement.toFixed(2)}%
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
+                        {/* ── 結論區（重點）：分類參數中位數 → 驗證期檢驗 → 增量分析結論 ── */}
                         {optimalCatStats && (
-                            <div className="pt-4 border-t border-slate-700 space-y-3">
-                                <div className="flex items-center gap-2">
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <h4 className="text-sm font-bold text-slate-200">最佳進場點參數中位數（訓練期參數）</h4>
                                     <span className="text-xs text-slate-500">各分類依進場日期前 {Math.round(TRAIN_RATIO * 100)}% 為訓練期計算，後 {Math.round((1 - TRAIN_RATIO) * 100)}% 留作下方驗證期檢驗</span>
                                 </div>
@@ -1095,21 +1016,18 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                     <div className="text-xs text-slate-500">
                                         優質數據篩選：改善幅度前 70%（訓練期 {optimalCatStats[optimalCatTab]!.rawN} 筆中保留 {optimalCatStats[optimalCatTab]!.n} 筆，門檻 ≥ {optimalCatStats[optimalCatTab]!.qualityCutoff.toFixed(1)}%）
                                     </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                        <StatCard label="RSI 中位數" value={optimalCatStats[optimalCatTab]!.medRsi?.toFixed(1) ?? '-'} color="text-amber-300" />
-                                        <StatCard label="Bias5 中位數" value={optimalCatStats[optimalCatTab]!.medBias5 !== null ? `${optimalCatStats[optimalCatTab]!.medBias5!.toFixed(1)}%` : '-'} color="text-sky-400" />
-                                        <StatCard label="Bias10 中位數" value={optimalCatStats[optimalCatTab]!.medBias10 !== null ? `${optimalCatStats[optimalCatTab]!.medBias10!.toFixed(1)}%` : '-'} color="text-violet-400" />
-                                        <StatCard label="Bias20 中位數" value={optimalCatStats[optimalCatTab]!.medBias20 !== null ? `${optimalCatStats[optimalCatTab]!.medBias20!.toFixed(1)}%` : '-'} color="text-slate-300" />
-                                        <StatCard label="斜率連升天數中位數" value={optimalCatStats[optimalCatTab]!.medSlopeUpDays !== null ? `${optimalCatStats[optimalCatTab]!.medSlopeUpDays}天` : '-'} color="text-amber-300" />
-                                        <StatCard label="外資連買天數中位數" value={optimalCatStats[optimalCatTab]!.medForeignConsecBuy !== null ? `${optimalCatStats[optimalCatTab]!.medForeignConsecBuy}天` : '-'} color="text-amber-300" />
-                                        <StatCard label="投信連買天數中位數" value={optimalCatStats[optimalCatTab]!.medTrustConsecBuy !== null ? `${optimalCatStats[optimalCatTab]!.medTrustConsecBuy}天` : '-'} color="text-amber-300" />
-                                        <StatCard label="融資連增天數中位數" value={optimalCatStats[optimalCatTab]!.medMarginConsecIncrease !== null ? `${optimalCatStats[optimalCatTab]!.medMarginConsecIncrease}天` : '-'} color="text-amber-300" />
-                                    </div>
-                                    <div className="text-xs text-slate-500 mt-1">強買門檻（取單一最佳日，不含 ±2 日鄰近樣本，比普通買進更嚴格）</div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                        <StatCard label="強買 RSI 中位數" value={optimalCatStats[optimalCatTab]!.medStrongRsi?.toFixed(1) ?? '-'} color="text-rose-300" />
-                                        <StatCard label="強買 Bias20 中位數" value={optimalCatStats[optimalCatTab]!.medStrongBias20 !== null ? `${optimalCatStats[optimalCatTab]!.medStrongBias20!.toFixed(1)}%` : '-'} color="text-rose-300" />
-                                        <StatCard label="強買斜率連升天數中位數" value={optimalCatStats[optimalCatTab]!.medStrongSlopeUpDays !== null ? `${optimalCatStats[optimalCatTab]!.medStrongSlopeUpDays}天` : '-'} color="text-rose-300" />
+                                    <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                                        <StatCard compact label="RSI 中位數" value={optimalCatStats[optimalCatTab]!.medRsi?.toFixed(1) ?? '-'} color="text-amber-300" />
+                                        <StatCard compact label="Bias5 中位數" value={optimalCatStats[optimalCatTab]!.medBias5 !== null ? `${optimalCatStats[optimalCatTab]!.medBias5!.toFixed(1)}%` : '-'} color="text-sky-400" />
+                                        <StatCard compact label="Bias10 中位數" value={optimalCatStats[optimalCatTab]!.medBias10 !== null ? `${optimalCatStats[optimalCatTab]!.medBias10!.toFixed(1)}%` : '-'} color="text-violet-400" />
+                                        <StatCard compact label="Bias20 中位數" value={optimalCatStats[optimalCatTab]!.medBias20 !== null ? `${optimalCatStats[optimalCatTab]!.medBias20!.toFixed(1)}%` : '-'} color="text-slate-300" />
+                                        <StatCard compact label="斜率連升天數" value={optimalCatStats[optimalCatTab]!.medSlopeUpDays !== null ? `${optimalCatStats[optimalCatTab]!.medSlopeUpDays}天` : '-'} color="text-amber-300" />
+                                        <StatCard compact label="外資連買天數" value={optimalCatStats[optimalCatTab]!.medForeignConsecBuy !== null ? `${optimalCatStats[optimalCatTab]!.medForeignConsecBuy}天` : '-'} color="text-amber-300" />
+                                        <StatCard compact label="投信連買天數" value={optimalCatStats[optimalCatTab]!.medTrustConsecBuy !== null ? `${optimalCatStats[optimalCatTab]!.medTrustConsecBuy}天` : '-'} color="text-amber-300" />
+                                        <StatCard compact label="融資連增天數" value={optimalCatStats[optimalCatTab]!.medMarginConsecIncrease !== null ? `${optimalCatStats[optimalCatTab]!.medMarginConsecIncrease}天` : '-'} color="text-amber-300" />
+                                        <StatCard compact label="強買 RSI" value={optimalCatStats[optimalCatTab]!.medStrongRsi?.toFixed(1) ?? '-'} color="text-rose-300" />
+                                        <StatCard compact label="強買 Bias20" value={optimalCatStats[optimalCatTab]!.medStrongBias20 !== null ? `${optimalCatStats[optimalCatTab]!.medStrongBias20!.toFixed(1)}%` : '-'} color="text-rose-300" />
+                                        <StatCard compact label="強買斜率天數" value={optimalCatStats[optimalCatTab]!.medStrongSlopeUpDays !== null ? `${optimalCatStats[optimalCatTab]!.medStrongSlopeUpDays}天` : '-'} color="text-rose-300" />
                                     </div>
                                     </>
                                 ) : (
@@ -1137,12 +1055,13 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                         </tr>
                                     );
                                     return (
-                                        <div className="mt-3 border border-slate-700/60 rounded-xl p-4 space-y-3">
-                                            <div className="flex items-center gap-2 flex-wrap">
+                                        <details className="mt-3 border border-slate-700/60 rounded-xl p-4 group">
+                                            <summary className="cursor-pointer list-none flex items-center gap-2 flex-wrap">
                                                 <span className="text-xs font-semibold text-slate-300">RSI 增量價值分析（第二階段④）</span>
                                                 <span className="text-[10px] text-slate-500">進場時 RSI &lt; 45 vs RSI ≥ 45 的實際報酬差異</span>
-                                            </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <span className="text-[10px] text-slate-600 ml-auto group-open:hidden">點開看細節 ▸</span>
+                                            </summary>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                                                 {([
                                                     { title: '全部進場', sub: d.all },
                                                     { title: 'Bias20 < 0% 進場', sub: d.negBias },
@@ -1166,10 +1085,10 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                                     </div>
                                                 ))}
                                             </div>
-                                            <p className="text-[10px] text-slate-600 leading-relaxed">
-                                                若 RSI &lt; 45 組的報酬與勝率未明顯優於 RSI ≥ 45 組 → RSI 過濾條件無增量價值，可考慮移除。此為描述性分析（你的實際交易結果），與前瞻報酬矩陣（市場統計）互補。
-                                            </p>
-                                        </div>
+                                            <div className="text-xs bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 mt-3">
+                                                <b className="text-amber-300">結論：</b>若 RSI &lt; 45 組的報酬與勝率未明顯優於 RSI ≥ 45 組 → RSI 過濾條件無增量價值，可考慮移除。此為描述性分析（你的實際交易結果），與前瞻報酬矩陣（市場統計）互補。
+                                            </div>
+                                        </details>
                                     );
                                 })()}
                                 {slopeIncremental?.[optimalCatTab] && (() => {
@@ -1189,12 +1108,13 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                         </tr>
                                     );
                                     return (
-                                        <div className="mt-3 border border-slate-700/60 rounded-xl p-4 space-y-3">
-                                            <div className="flex items-center gap-2 flex-wrap">
+                                        <details className="mt-3 border border-slate-700/60 rounded-xl p-4 group">
+                                            <summary className="cursor-pointer list-none flex items-center gap-2 flex-wrap">
                                                 <span className="text-xs font-semibold text-slate-300">斜率確認棒數增量分析（第二階段⑤）</span>
                                                 <span className="text-[10px] text-slate-500">進場時 20MA 連升天數 0 / 1 / ≥2 的實際報酬差異</span>
-                                            </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <span className="text-[10px] text-slate-600 ml-auto group-open:hidden">點開看細節 ▸</span>
+                                            </summary>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                                                 {([
                                                     { title: '全部進場', sub: d.all },
                                                     { title: 'Bias20 < 0% 進場', sub: d.negBias },
@@ -1219,10 +1139,10 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                                     </div>
                                                 ))}
                                             </div>
-                                            <p className="text-[10px] text-slate-600 leading-relaxed">
-                                                若各組報酬差異不明顯 → 斜率連升天數條件無增量價值，可考慮移除或降低門檻。
-                                            </p>
-                                        </div>
+                                            <div className="text-xs bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 mt-3">
+                                                <b className="text-amber-300">結論：</b>若各組報酬差異不明顯 → 斜率連升天數條件無增量價值，可考慮移除或降低門檻。
+                                            </div>
+                                        </details>
                                     );
                                 })()}
                                 {chipIncremental?.[optimalCatTab] && (() => {
@@ -1242,12 +1162,13 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                         </tr>
                                     );
                                     return (
-                                        <div className="mt-3 border border-slate-700/60 rounded-xl p-4 space-y-3">
-                                            <div className="flex items-center gap-2 flex-wrap">
+                                        <details className="mt-3 border border-slate-700/60 rounded-xl p-4 group">
+                                            <summary className="cursor-pointer list-none flex items-center gap-2 flex-wrap">
                                                 <span className="text-xs font-semibold text-slate-300">籌碼覆寫規則增量分析（第二階段⑥）</span>
                                                 <span className="text-[10px] text-slate-500">進場時外資/投信連買天數、融資連增天數 vs 實際報酬</span>
-                                            </div>
-                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <span className="text-[10px] text-slate-600 ml-auto group-open:hidden">點開看細節 ▸</span>
+                                            </summary>
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
                                                 {([
                                                     { title: '外資連買天數（共振）', sub: d.foreign },
                                                     { title: '投信連買天數（共振）', sub: d.trust },
@@ -1273,14 +1194,99 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
                                                     </div>
                                                 ))}
                                             </div>
-                                            <p className="text-[10px] text-slate-600 leading-relaxed">
-                                                外資/投信連買≥3天組報酬明顯高於0天組 → 共振升級有效；融資連增≥3天組報酬明顯低於0天組 → 背離降級有效。
-                                            </p>
-                                        </div>
+                                            <div className="text-xs bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-slate-300 mt-3">
+                                                <b className="text-amber-300">結論：</b>外資/投信連買≥3天組報酬明顯高於0天組 → 共振升級有效；融資連增≥3天組報酬明顯低於0天組 → 背離降級有效。
+                                            </div>
+                                        </details>
                                     );
                                 })()}
                             </div>
                         )}
+
+                        {/* ── 原始數據參考（逐筆明細，非結論，收在下方）── */}
+                        <div className="pt-4 border-t border-slate-700 space-y-3">
+                            <h4 className="text-xs font-bold text-slate-500">原始數據參考</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                                <StatCard compact label="平均可改善報酬" value={avgImprovement !== null ? `+${avgImprovement.toFixed(2)}%` : '-'} sub="全部交易" color={(avgImprovement ?? 0) > 0 ? 'text-red-400' : 'text-slate-300'} />
+                                <StatCard compact label="可顯著改善筆數" value={`${couldImprove} / ${results.length}`} sub="改善 > 0.5%" color="text-amber-400" />
+                                <StatCard compact label="虧損交易筆數" value={`${losers.length}`} sub="實際負報酬" color="text-emerald-400" />
+                                <StatCard compact label="虧損平均可減少" value={avgLossReduction !== null ? `+${avgLossReduction.toFixed(2)}%` : '-'} sub="提早/延後進場" color={(avgLossReduction ?? 0) > 0 ? 'text-red-400' : 'text-slate-400'} />
+                                <StatCard compact label="可轉為獲利" value={`${lossAvoided} 筆`} sub="最佳日報酬 ≥ 0" color="text-red-400" />
+                            </div>
+
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead><tr className="text-xs text-slate-400 border-b border-slate-700">
+                                        <th className="py-2 px-3">標的</th>
+                                        <th className="py-2 px-3 text-center">進場日</th>
+                                        <th className="py-2 px-3 text-center">出場日</th>
+                                        <th className="py-2 px-3 text-right">實際買入</th>
+                                        <th className="py-2 px-3 text-right">實際報酬</th>
+                                        <th className="py-2 px-3 text-center text-sky-400">B5</th>
+                                        <th className="py-2 px-3 text-center text-violet-400">B10</th>
+                                        <th className="py-2 px-3 text-center text-slate-400">B20</th>
+                                        <th className="py-2 px-3 text-center">最佳日（偏移）</th>
+                                        <th className="py-2 px-3 text-right">最佳價格</th>
+                                        <th className="py-2 px-3 text-right">最佳報酬</th>
+                                        <th className="py-2 px-3 text-center text-sky-400">最佳B5</th>
+                                        <th className="py-2 px-3 text-center text-violet-400">最佳B10</th>
+                                        <th className="py-2 px-3 text-center text-slate-400">最佳B20</th>
+                                        <th className="py-2 px-3 text-center text-amber-400">最佳RSI</th>
+                                        <th className="py-2 px-3 text-center text-amber-400">最佳斜率</th>
+                                        <th className="py-2 px-3 text-center text-amber-400">最佳外資</th>
+                                        <th className="py-2 px-3 text-center text-amber-400">最佳投信</th>
+                                        <th className="py-2 px-3 text-center text-amber-400">最佳融資</th>
+                                        <th className="py-2 px-3 text-right">可改善</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        {results.slice(0, 50).map((r, i) => (
+                                            <tr key={i} className={`border-t border-slate-700/30 transition-colors ${r.actualReturn < 0 ? 'bg-emerald-950/20 hover:bg-emerald-950/30' : 'hover:bg-slate-700/10'}`}>
+                                                <td className="py-2 px-3 text-sm">
+                                                    <div className="font-medium text-white">{r.name ?? r.symbol}</div>
+                                                    <div className="text-xs text-slate-500">{r.symbol}</div>
+                                                </td>
+                                                <td className="py-2 px-3 text-center text-xs text-slate-400">{r.buyDate}</td>
+                                                <td className="py-2 px-3 text-center text-xs text-slate-400">{r.sellDate}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-sm text-slate-300">{r.actualBuyPrice}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-sm">
+                                                    <span className={r.actualReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}>
+                                                        {r.actualReturn >= 0 ? '+' : ''}{r.actualReturn.toFixed(2)}%
+                                                    </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-sky-400">{r.actualBias5 !== null ? `${r.actualBias5.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-violet-400">{r.actualBias10 !== null ? `${r.actualBias10.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-slate-400">{r.actualBias20 !== null ? `${r.actualBias20.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center text-xs">
+                                                    <span className="text-slate-300">{r.bestDate}</span>
+                                                    <span className={`ml-1 ${r.dayOffset > 0 ? 'text-sky-400' : r.dayOffset < 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                                                        {r.dayOffset > 0 ? `(早 ${r.dayOffset}天)` : r.dayOffset < 0 ? `(晚 ${Math.abs(r.dayOffset)}天)` : '(同日)'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-right font-mono text-sm text-slate-300">{r.bestPrice}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-sm">
+                                                    <span className={r.bestReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}>
+                                                        {r.bestReturn >= 0 ? '+' : ''}{r.bestReturn.toFixed(2)}%
+                                                    </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-sky-400">{r.bestBias5 !== null ? `${r.bestBias5.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-violet-400">{r.bestBias10 !== null ? `${r.bestBias10.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-slate-400">{r.bestBias20 !== null ? `${r.bestBias20.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestRsi != null ? r.bestRsi.toFixed(1) : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestSlopeUpDays != null ? `${r.bestSlopeUpDays}天` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestForeignConsecBuy != null ? `${r.bestForeignConsecBuy}天` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestTrustConsecBuy != null ? `${r.bestTrustConsecBuy}天` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestMarginConsecIncrease != null ? `${r.bestMarginConsecIncrease}天` : '-'}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-sm font-bold">
+                                                    <span className={r.improvement > 0.5 ? 'text-amber-400' : r.improvement > 0 ? 'text-slate-300' : 'text-slate-500'}>
+                                                        {r.improvement > 0 ? '+' : ''}{r.improvement.toFixed(2)}%
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </>
                 )}
             </div>
@@ -1290,14 +1296,14 @@ const OptimalEntrySection: React.FC<{ results: WindowResult[] | null }> = ({ res
 
 // ── 第三階段⑨：訊號成效持續追蹤 ─────────────────────────────────────────────
 const SIGNAL_LABELS: Record<string, string> = {
-    STRONG_LAYOUT: '🚀 強力布局', STRONG_BUY: '🔴 強力買進', BUY: '🔴 適合布局',
+    STRONG_BUY: '🔴 強力買進', BUY: '🔴 適合布局',
     PARTIAL_SELL: '🟡 分批停利', SECOND_PARTIAL_SELL: '🟠 再次減碼',
-    FORCE_SELL: '🟢 強制停利', SELL: '🟢 建議賣出',
+    FORCE_SELL: '🟢 強制停利',
     STOP_LOSS: '🟢 停損', STOP_LOSS_ALERT: '⚠️ 停損預警', RISK_ALERT: '⚠️ 風險預警',
     WATCH: '🟠 持續觀察', WATCH_DIVERGE: '🟠 觀察背離',
 };
 /** 買進方向訊號：發訊後報酬應為正才代表有預測力；其餘（停利/賣出/警示）後續應偏弱 */
-const BUY_DIRECTION_SIGNALS = new Set(['STRONG_LAYOUT', 'STRONG_BUY', 'BUY']);
+const BUY_DIRECTION_SIGNALS = new Set(['STRONG_BUY', 'BUY']);
 
 const SignalTrackerSection: React.FC = () => {
     const [log, setLog] = useState<SignalRecord[]>([]);
@@ -1571,8 +1577,8 @@ const ParamRecommendationSection: React.FC<{
             rows: tab === 'ETF' ? [
                 { label: '停損參數', value: '—', verdict: '不適用', reason: 'ETF 無停損層（既有設計），視為長線持有' },
             ] : [
-                { label: '停損 Bias20', value: pct(s.stopLoss?.medBias20), verdict: '參考', reason: `虧損樣本少（訓練期 ${s.stopLoss?.n ?? 0} 筆），統計不穩，僅供參考` },
-                { label: '強制停損 Bias20', value: pct(s.stopLoss?.medForceBias20), verdict: '參考', reason: '同上：樣本不足，維持現行固定停損 % 為主' },
+                { label: '停損 Bias20', value: pct(s.stopLoss?.medBias20), verdict: '參考', reason: `虧損樣本太少（訓練期僅 ${s.stopLoss?.n ?? 0} 筆），且此數值是「虧損交易中損失最小反彈日」的乖離，非系統跌破警戒線門檻，語意不同、不自動套用` },
+                { label: '強制停損 Bias20', value: pct(s.stopLoss?.medForceBias20), verdict: '參考', reason: '同上：樣本太少且語意不同，維持現行固定停損 % 為主，不自動套用' },
             ],
         },
     ];
@@ -1589,7 +1595,7 @@ const ParamRecommendationSection: React.FC<{
                     <li><b className="text-emerald-400">⑦ z-score</b>：驗證期全數不優於固定門檻，維持固定百分比門檻。</li>
                     <li><b className="text-emerald-400">⑧ 保守模式</b>：保守日進場僅 9 筆且全數獲利，維持「僅警示、不阻斷買進」。</li>
                 </ul>
-                <p className="text-[10px] text-slate-600">樣本集中少數標的，建議值作為「調整方向」而非硬性依據；詳細數字見「分析摘要」分頁。</p>
+                <p className="text-[10px] text-slate-600">樣本集中少數標的，建議值作為「調整方向」而非硬性依據；詳細數字見「驗證明細」分頁。</p>
             </div>
 
             {/* 參數建議表 */}
@@ -2137,114 +2143,12 @@ const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({
                 )}
                 {results && (
                     <>
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                            <div className="bg-slate-900/60 rounded-xl p-3 text-center">
-                                <div className="text-xs text-slate-400 mb-1">平均可改善報酬</div>
-                                <div className={`text-lg font-bold ${(avgImprovement ?? 0) > 0 ? 'text-red-400' : 'text-slate-300'}`}>
-                                    {avgImprovement !== null ? `+${avgImprovement.toFixed(2)}%` : '-'}
-                                </div>
-                                <div className="text-[10px] text-slate-500">全部交易</div>
-                            </div>
-                            <div className="bg-slate-900/60 rounded-xl p-3 text-center">
-                                <div className="text-xs text-slate-400 mb-1">可顯著改善筆數</div>
-                                <div className="text-lg font-bold text-amber-400">{couldImprove} / {results.length}</div>
-                                <div className="text-[10px] text-slate-500">改善 &gt; 0.5%</div>
-                            </div>
-                            <div className="bg-emerald-900/30 border border-emerald-800/40 rounded-xl p-3 text-center">
-                                <div className="text-xs text-emerald-400 mb-1">虧損交易筆數</div>
-                                <div className="text-lg font-bold text-emerald-400">{losers.length}</div>
-                                <div className="text-[10px] text-slate-500">實際負報酬</div>
-                            </div>
-                            <div className="bg-emerald-900/30 border border-emerald-800/40 rounded-xl p-3 text-center">
-                                <div className="text-xs text-emerald-400 mb-1">虧損平均可減少</div>
-                                <div className={`text-lg font-bold ${(avgLossReduction ?? 0) > 0 ? 'text-red-400' : 'text-slate-400'}`}>
-                                    {avgLossReduction !== null ? `+${avgLossReduction.toFixed(2)}%` : '-'}
-                                </div>
-                                <div className="text-[10px] text-slate-500">提早/延後出場</div>
-                            </div>
-                            <div className="bg-emerald-900/30 border border-emerald-800/40 rounded-xl p-3 text-center">
-                                <div className="text-xs text-emerald-400 mb-1">可轉為獲利</div>
-                                <div className="text-lg font-bold text-red-400">{lossAvoided} 筆</div>
-                                <div className="text-[10px] text-slate-500">最佳日報酬 ≥ 0</div>
-                            </div>
+                        <div className="text-xs text-slate-300 bg-sky-500/10 border border-sky-500/30 rounded-lg px-3 py-2 leading-relaxed">
+                            <b className="text-sky-300">這裡在做什麼：</b>回頭看每筆交易「如果在附近最高價出場」能多賺多少，反推出建議的停利/停損乖離門檻，並檢驗這個門檻放到近期交易上還準不準。
                         </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left">
-                                <thead><tr className="text-xs text-slate-400 border-b border-slate-700">
-                                    <th className="py-2 px-3">標的</th>
-                                    <th className="py-2 px-3 text-center">進場日</th>
-                                    <th className="py-2 px-3 text-center">出場日</th>
-                                    <th className="py-2 px-3 text-right">實際賣出</th>
-                                    <th className="py-2 px-3 text-right">實際報酬</th>
-                                    <th className="py-2 px-3 text-center text-sky-400">B5</th>
-                                    <th className="py-2 px-3 text-center text-violet-400">B10</th>
-                                    <th className="py-2 px-3 text-center text-slate-400">B20</th>
-                                    <th className="py-2 px-3 text-center">最佳日（偏移）</th>
-                                    <th className="py-2 px-3 text-right">最佳價格</th>
-                                    <th className="py-2 px-3 text-right">最佳報酬</th>
-                                    <th className="py-2 px-3 text-center text-sky-400">最佳B5</th>
-                                    <th className="py-2 px-3 text-center text-violet-400">最佳B10</th>
-                                    <th className="py-2 px-3 text-center text-slate-400">最佳B20</th>
-                                    <th className="py-2 px-3 text-center text-amber-400">最佳RSI</th>
-                                    <th className="py-2 px-3 text-center text-amber-400">最佳斜率</th>
-                                    <th className="py-2 px-3 text-center text-amber-400">最佳外資</th>
-                                    <th className="py-2 px-3 text-center text-amber-400">最佳投信</th>
-                                    <th className="py-2 px-3 text-center text-amber-400">最佳融資</th>
-                                    <th className="py-2 px-3 text-right">可改善</th>
-                                </tr></thead>
-                                <tbody>
-                                    {results.slice(0, 50).map((r, i) => (
-                                        <tr key={i} className={`border-t border-slate-700/30 transition-colors ${r.actualReturn < 0 ? 'bg-emerald-950/20 hover:bg-emerald-950/30' : 'hover:bg-slate-700/10'}`}>
-                                            <td className="py-2 px-3 text-sm">
-                                                <div className="font-medium text-white">{r.name ?? r.symbol}</div>
-                                                <div className="text-xs text-slate-500">{r.symbol}</div>
-                                            </td>
-                                            <td className="py-2 px-3 text-center text-xs text-slate-400">{r.buyDate}</td>
-                                            <td className="py-2 px-3 text-center text-xs text-slate-400">{r.sellDate}</td>
-                                            <td className="py-2 px-3 text-right font-mono text-sm text-slate-300">{r.actualSellPrice}</td>
-                                            <td className="py-2 px-3 text-right font-mono text-sm">
-                                                <span className={r.actualReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}>
-                                                    {r.actualReturn >= 0 ? '+' : ''}{r.actualReturn.toFixed(2)}%
-                                                </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-sky-400">{r.actualBias5 !== null ? `${r.actualBias5.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-violet-400">{r.actualBias10 !== null ? `${r.actualBias10.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-slate-400">{r.actualBias20 !== null ? `${r.actualBias20.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center text-xs">
-                                                <span className="text-slate-300">{r.bestDate}</span>
-                                                <span className={`ml-1 ${r.dayOffset > 0 ? 'text-sky-400' : r.dayOffset < 0 ? 'text-amber-400' : 'text-slate-500'}`}>
-                                                    {r.dayOffset > 0 ? `(早 ${r.dayOffset}天)` : r.dayOffset < 0 ? `(晚 ${Math.abs(r.dayOffset)}天)` : '(同日)'}
-                                                </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-right font-mono text-sm text-slate-300">{r.bestPrice}</td>
-                                            <td className="py-2 px-3 text-right font-mono text-sm">
-                                                <span className={r.bestReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}>
-                                                    {r.bestReturn >= 0 ? '+' : ''}{r.bestReturn.toFixed(2)}%
-                                                </span>
-                                            </td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-sky-400">{r.bestBias5 !== null ? `${r.bestBias5.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-violet-400">{r.bestBias10 !== null ? `${r.bestBias10.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-slate-400">{r.bestBias20 !== null ? `${r.bestBias20.toFixed(1)}%` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestRsi != null ? r.bestRsi.toFixed(1) : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestSlopeUpDays != null ? `${r.bestSlopeUpDays}天` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestForeignConsecBuy != null ? `${r.bestForeignConsecBuy}天` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestTrustConsecBuy != null ? `${r.bestTrustConsecBuy}天` : '-'}</td>
-                                            <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestMarginConsecIncrease != null ? `${r.bestMarginConsecIncrease}天` : '-'}</td>
-                                            <td className="py-2 px-3 text-right font-mono text-sm font-bold">
-                                                <span className={r.improvement > 0.5 ? 'text-amber-400' : r.improvement > 0 ? 'text-slate-300' : 'text-slate-500'}>
-                                                    {r.improvement > 0 ? '+' : ''}{r.improvement.toFixed(2)}%
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
                         {(exitCatStats || stopLossCatStats) && (
-                            <div className="pt-4 border-t border-slate-700 space-y-3">
-                                <div className="flex items-center gap-2">
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2 flex-wrap">
                                     <h4 className="text-sm font-bold text-slate-200">最佳出場點參數中位數（訓練期參數）</h4>
                                     <span className="text-xs text-slate-500">各分類依出場日期前 {Math.round(TRAIN_RATIO * 100)}% 為訓練期計算，後 {Math.round((1 - TRAIN_RATIO) * 100)}% 留作驗證期檢驗</span>
                                 </div>
@@ -2274,21 +2178,18 @@ const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({
                                     <div className="text-xs text-slate-500">
                                         SELL（停利，僅取最終獲利交易）· 優質數據篩選：改善幅度前 70%（訓練期 {exitCatStats[exitCatTab]!.rawN} 筆中保留 {exitCatStats[exitCatTab]!.n} 筆，門檻 ≥ {exitCatStats[exitCatTab]!.qualityCutoff.toFixed(1)}%）
                                     </div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                        <StatCard label="RSI 中位數" value={exitCatStats[exitCatTab]!.medRsi?.toFixed(1) ?? '-'} color="text-amber-300" />
-                                        <StatCard label="Bias5 中位數" value={exitCatStats[exitCatTab]!.medBias5 !== null ? `${exitCatStats[exitCatTab]!.medBias5!.toFixed(1)}%` : '-'} color="text-sky-400" />
-                                        <StatCard label="Bias10 中位數" value={exitCatStats[exitCatTab]!.medBias10 !== null ? `${exitCatStats[exitCatTab]!.medBias10!.toFixed(1)}%` : '-'} color="text-violet-400" />
-                                        <StatCard label="Bias20 中位數" value={exitCatStats[exitCatTab]!.medBias20 !== null ? `${exitCatStats[exitCatTab]!.medBias20!.toFixed(1)}%` : '-'} color="text-slate-300" />
-                                        <StatCard label="斜率連升天數中位數" value={exitCatStats[exitCatTab]!.medSlopeUpDays !== null ? `${exitCatStats[exitCatTab]!.medSlopeUpDays}天` : '-'} color="text-amber-300" />
-                                        <StatCard label="外資連買天數中位數" value={exitCatStats[exitCatTab]!.medForeignConsecBuy !== null ? `${exitCatStats[exitCatTab]!.medForeignConsecBuy}天` : '-'} color="text-amber-300" />
-                                        <StatCard label="投信連買天數中位數" value={exitCatStats[exitCatTab]!.medTrustConsecBuy !== null ? `${exitCatStats[exitCatTab]!.medTrustConsecBuy}天` : '-'} color="text-amber-300" />
-                                        <StatCard label="融資連增天數中位數" value={exitCatStats[exitCatTab]!.medMarginConsecIncrease !== null ? `${exitCatStats[exitCatTab]!.medMarginConsecIncrease}天` : '-'} color="text-amber-300" />
-                                    </div>
-                                    <div className="text-xs text-slate-500 mt-1">FORCE SELL（取單一最佳出場日，不含 ±2 日鄰近樣本，比一般停利更嚴格）</div>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                        <StatCard label="強制停利 RSI 中位數" value={exitCatStats[exitCatTab]!.medForceRsi?.toFixed(1) ?? '-'} color="text-red-300" />
-                                        <StatCard label="強制停利 Bias20 中位數" value={exitCatStats[exitCatTab]!.medForceBias20 !== null ? `${exitCatStats[exitCatTab]!.medForceBias20!.toFixed(1)}%` : '-'} color="text-red-300" />
-                                        <StatCard label="強制停利斜率連升天數中位數" value={exitCatStats[exitCatTab]!.medForceSlopeUpDays !== null ? `${exitCatStats[exitCatTab]!.medForceSlopeUpDays}天` : '-'} color="text-red-300" />
+                                    <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                                        <StatCard compact label="RSI 中位數" value={exitCatStats[exitCatTab]!.medRsi?.toFixed(1) ?? '-'} color="text-amber-300" />
+                                        <StatCard compact label="Bias5 中位數" value={exitCatStats[exitCatTab]!.medBias5 !== null ? `${exitCatStats[exitCatTab]!.medBias5!.toFixed(1)}%` : '-'} color="text-sky-400" />
+                                        <StatCard compact label="Bias10 中位數" value={exitCatStats[exitCatTab]!.medBias10 !== null ? `${exitCatStats[exitCatTab]!.medBias10!.toFixed(1)}%` : '-'} color="text-violet-400" />
+                                        <StatCard compact label="Bias20 中位數" value={exitCatStats[exitCatTab]!.medBias20 !== null ? `${exitCatStats[exitCatTab]!.medBias20!.toFixed(1)}%` : '-'} color="text-slate-300" />
+                                        <StatCard compact label="斜率連升天數" value={exitCatStats[exitCatTab]!.medSlopeUpDays !== null ? `${exitCatStats[exitCatTab]!.medSlopeUpDays}天` : '-'} color="text-amber-300" />
+                                        <StatCard compact label="外資連買天數" value={exitCatStats[exitCatTab]!.medForeignConsecBuy !== null ? `${exitCatStats[exitCatTab]!.medForeignConsecBuy}天` : '-'} color="text-amber-300" />
+                                        <StatCard compact label="投信連買天數" value={exitCatStats[exitCatTab]!.medTrustConsecBuy !== null ? `${exitCatStats[exitCatTab]!.medTrustConsecBuy}天` : '-'} color="text-amber-300" />
+                                        <StatCard compact label="融資連增天數" value={exitCatStats[exitCatTab]!.medMarginConsecIncrease !== null ? `${exitCatStats[exitCatTab]!.medMarginConsecIncrease}天` : '-'} color="text-amber-300" />
+                                        <StatCard compact label="強制停利 RSI" value={exitCatStats[exitCatTab]!.medForceRsi?.toFixed(1) ?? '-'} color="text-red-300" />
+                                        <StatCard compact label="強制停利 Bias20" value={exitCatStats[exitCatTab]!.medForceBias20 !== null ? `${exitCatStats[exitCatTab]!.medForceBias20!.toFixed(1)}%` : '-'} color="text-red-300" />
+                                        <StatCard compact label="強制停利斜率天數" value={exitCatStats[exitCatTab]!.medForceSlopeUpDays !== null ? `${exitCatStats[exitCatTab]!.medForceSlopeUpDays}天` : '-'} color="text-red-300" />
                                     </div>
                                     </>
                                 ) : (
@@ -2301,7 +2202,7 @@ const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({
                                 />
                                 {stopLossCatStats && (
                                     <div className="pt-3 border-t border-slate-700/60 space-y-3">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
                                             <h4 className="text-sm font-bold text-slate-200">最佳停損點參數中位數</h4>
                                             <span className="text-xs text-slate-500">STOP LOSS / FORCE STOP LOSS，僅取最終虧損交易</span>
                                         </div>
@@ -2311,21 +2212,18 @@ const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({
                                                 STOP LOSS（找損失最小的停損點）· 優質數據篩選：改善幅度前 70%（訓練期 {stopLossCatStats[exitCatTab]!.rawN} 筆中保留 {stopLossCatStats[exitCatTab]!.n} 筆，門檻 ≥ {stopLossCatStats[exitCatTab]!.qualityCutoff.toFixed(1)}%）· 虧損樣本較少，暫不做切分驗證
                                                 {exitCatTab === 'ETF' && <span className="text-slate-600">（ETF 無停損機制，此數值僅供參考）</span>}
                                             </div>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                                <StatCard label="RSI 中位數" value={stopLossCatStats[exitCatTab]!.medRsi?.toFixed(1) ?? '-'} color="text-emerald-300" />
-                                                <StatCard label="Bias5 中位數" value={stopLossCatStats[exitCatTab]!.medBias5 !== null ? `${stopLossCatStats[exitCatTab]!.medBias5!.toFixed(1)}%` : '-'} color="text-sky-400" />
-                                                <StatCard label="Bias10 中位數" value={stopLossCatStats[exitCatTab]!.medBias10 !== null ? `${stopLossCatStats[exitCatTab]!.medBias10!.toFixed(1)}%` : '-'} color="text-violet-400" />
-                                                <StatCard label="Bias20 中位數" value={stopLossCatStats[exitCatTab]!.medBias20 !== null ? `${stopLossCatStats[exitCatTab]!.medBias20!.toFixed(1)}%` : '-'} color="text-slate-300" />
-                                                <StatCard label="斜率連升天數中位數" value={stopLossCatStats[exitCatTab]!.medSlopeUpDays !== null ? `${stopLossCatStats[exitCatTab]!.medSlopeUpDays}天` : '-'} color="text-emerald-300" />
-                                                <StatCard label="外資連買天數中位數" value={stopLossCatStats[exitCatTab]!.medForeignConsecBuy !== null ? `${stopLossCatStats[exitCatTab]!.medForeignConsecBuy}天` : '-'} color="text-emerald-300" />
-                                                <StatCard label="投信連買天數中位數" value={stopLossCatStats[exitCatTab]!.medTrustConsecBuy !== null ? `${stopLossCatStats[exitCatTab]!.medTrustConsecBuy}天` : '-'} color="text-emerald-300" />
-                                                <StatCard label="融資連增天數中位數" value={stopLossCatStats[exitCatTab]!.medMarginConsecIncrease !== null ? `${stopLossCatStats[exitCatTab]!.medMarginConsecIncrease}天` : '-'} color="text-emerald-300" />
-                                            </div>
-                                            <div className="text-xs text-slate-500 mt-1">FORCE STOP LOSS（窗口內損失最大的一天，刻畫最危險狀態特徵，目前僅供參考、不自動套用）</div>
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                                <StatCard label="最危險 RSI 中位數" value={stopLossCatStats[exitCatTab]!.medForceRsi?.toFixed(1) ?? '-'} color="text-slate-400" />
-                                                <StatCard label="最危險 Bias20 中位數" value={stopLossCatStats[exitCatTab]!.medForceBias20 !== null ? `${stopLossCatStats[exitCatTab]!.medForceBias20!.toFixed(1)}%` : '-'} color="text-slate-400" />
-                                                <StatCard label="最危險斜率天數中位數" value={stopLossCatStats[exitCatTab]!.medForceSlopeUpDays !== null ? `${stopLossCatStats[exitCatTab]!.medForceSlopeUpDays}天` : '-'} color="text-slate-400" />
+                                            <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
+                                                <StatCard compact label="RSI 中位數" value={stopLossCatStats[exitCatTab]!.medRsi?.toFixed(1) ?? '-'} color="text-emerald-300" />
+                                                <StatCard compact label="Bias5 中位數" value={stopLossCatStats[exitCatTab]!.medBias5 !== null ? `${stopLossCatStats[exitCatTab]!.medBias5!.toFixed(1)}%` : '-'} color="text-sky-400" />
+                                                <StatCard compact label="Bias10 中位數" value={stopLossCatStats[exitCatTab]!.medBias10 !== null ? `${stopLossCatStats[exitCatTab]!.medBias10!.toFixed(1)}%` : '-'} color="text-violet-400" />
+                                                <StatCard compact label="Bias20 中位數" value={stopLossCatStats[exitCatTab]!.medBias20 !== null ? `${stopLossCatStats[exitCatTab]!.medBias20!.toFixed(1)}%` : '-'} color="text-slate-300" />
+                                                <StatCard compact label="斜率連升天數" value={stopLossCatStats[exitCatTab]!.medSlopeUpDays !== null ? `${stopLossCatStats[exitCatTab]!.medSlopeUpDays}天` : '-'} color="text-emerald-300" />
+                                                <StatCard compact label="外資連買天數" value={stopLossCatStats[exitCatTab]!.medForeignConsecBuy !== null ? `${stopLossCatStats[exitCatTab]!.medForeignConsecBuy}天` : '-'} color="text-emerald-300" />
+                                                <StatCard compact label="投信連買天數" value={stopLossCatStats[exitCatTab]!.medTrustConsecBuy !== null ? `${stopLossCatStats[exitCatTab]!.medTrustConsecBuy}天` : '-'} color="text-emerald-300" />
+                                                <StatCard compact label="融資連增天數" value={stopLossCatStats[exitCatTab]!.medMarginConsecIncrease !== null ? `${stopLossCatStats[exitCatTab]!.medMarginConsecIncrease}天` : '-'} color="text-emerald-300" />
+                                                <StatCard compact label="最危險 RSI" value={stopLossCatStats[exitCatTab]!.medForceRsi?.toFixed(1) ?? '-'} color="text-slate-400" />
+                                                <StatCard compact label="最危險 Bias20" value={stopLossCatStats[exitCatTab]!.medForceBias20 !== null ? `${stopLossCatStats[exitCatTab]!.medForceBias20!.toFixed(1)}%` : '-'} color="text-slate-400" />
+                                                <StatCard compact label="最危險斜率天數" value={stopLossCatStats[exitCatTab]!.medForceSlopeUpDays !== null ? `${stopLossCatStats[exitCatTab]!.medForceSlopeUpDays}天` : '-'} color="text-slate-400" />
                                             </div>
                                             </>
                                         ) : (
@@ -2335,6 +2233,91 @@ const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({
                                 )}
                             </div>
                         )}
+
+                        {/* ── 原始數據參考（逐筆明細，非結論，收在下方）── */}
+                        <div className="pt-4 border-t border-slate-700 space-y-3">
+                            <h4 className="text-xs font-bold text-slate-500">原始數據參考</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+                                <StatCard compact label="平均可改善報酬" value={avgImprovement !== null ? `+${avgImprovement.toFixed(2)}%` : '-'} sub="全部交易" color={(avgImprovement ?? 0) > 0 ? 'text-red-400' : 'text-slate-300'} />
+                                <StatCard compact label="可顯著改善筆數" value={`${couldImprove} / ${results.length}`} sub="改善 > 0.5%" color="text-amber-400" />
+                                <StatCard compact label="虧損交易筆數" value={`${losers.length}`} sub="實際負報酬" color="text-emerald-400" />
+                                <StatCard compact label="虧損平均可減少" value={avgLossReduction !== null ? `+${avgLossReduction.toFixed(2)}%` : '-'} sub="提早/延後出場" color={(avgLossReduction ?? 0) > 0 ? 'text-red-400' : 'text-slate-400'} />
+                                <StatCard compact label="可轉為獲利" value={`${lossAvoided} 筆`} sub="最佳日報酬 ≥ 0" color="text-red-400" />
+                            </div>
+
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead><tr className="text-xs text-slate-400 border-b border-slate-700">
+                                        <th className="py-2 px-3">標的</th>
+                                        <th className="py-2 px-3 text-center">進場日</th>
+                                        <th className="py-2 px-3 text-center">出場日</th>
+                                        <th className="py-2 px-3 text-right">實際賣出</th>
+                                        <th className="py-2 px-3 text-right">實際報酬</th>
+                                        <th className="py-2 px-3 text-center text-sky-400">B5</th>
+                                        <th className="py-2 px-3 text-center text-violet-400">B10</th>
+                                        <th className="py-2 px-3 text-center text-slate-400">B20</th>
+                                        <th className="py-2 px-3 text-center">最佳日（偏移）</th>
+                                        <th className="py-2 px-3 text-right">最佳價格</th>
+                                        <th className="py-2 px-3 text-right">最佳報酬</th>
+                                        <th className="py-2 px-3 text-center text-sky-400">最佳B5</th>
+                                        <th className="py-2 px-3 text-center text-violet-400">最佳B10</th>
+                                        <th className="py-2 px-3 text-center text-slate-400">最佳B20</th>
+                                        <th className="py-2 px-3 text-center text-amber-400">最佳RSI</th>
+                                        <th className="py-2 px-3 text-center text-amber-400">最佳斜率</th>
+                                        <th className="py-2 px-3 text-center text-amber-400">最佳外資</th>
+                                        <th className="py-2 px-3 text-center text-amber-400">最佳投信</th>
+                                        <th className="py-2 px-3 text-center text-amber-400">最佳融資</th>
+                                        <th className="py-2 px-3 text-right">可改善</th>
+                                    </tr></thead>
+                                    <tbody>
+                                        {results.slice(0, 50).map((r, i) => (
+                                            <tr key={i} className={`border-t border-slate-700/30 transition-colors ${r.actualReturn < 0 ? 'bg-emerald-950/20 hover:bg-emerald-950/30' : 'hover:bg-slate-700/10'}`}>
+                                                <td className="py-2 px-3 text-sm">
+                                                    <div className="font-medium text-white">{r.name ?? r.symbol}</div>
+                                                    <div className="text-xs text-slate-500">{r.symbol}</div>
+                                                </td>
+                                                <td className="py-2 px-3 text-center text-xs text-slate-400">{r.buyDate}</td>
+                                                <td className="py-2 px-3 text-center text-xs text-slate-400">{r.sellDate}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-sm text-slate-300">{r.actualSellPrice}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-sm">
+                                                    <span className={r.actualReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}>
+                                                        {r.actualReturn >= 0 ? '+' : ''}{r.actualReturn.toFixed(2)}%
+                                                    </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-sky-400">{r.actualBias5 !== null ? `${r.actualBias5.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-violet-400">{r.actualBias10 !== null ? `${r.actualBias10.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-slate-400">{r.actualBias20 !== null ? `${r.actualBias20.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center text-xs">
+                                                    <span className="text-slate-300">{r.bestDate}</span>
+                                                    <span className={`ml-1 ${r.dayOffset > 0 ? 'text-sky-400' : r.dayOffset < 0 ? 'text-amber-400' : 'text-slate-500'}`}>
+                                                        {r.dayOffset > 0 ? `(早 ${r.dayOffset}天)` : r.dayOffset < 0 ? `(晚 ${Math.abs(r.dayOffset)}天)` : '(同日)'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-right font-mono text-sm text-slate-300">{r.bestPrice}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-sm">
+                                                    <span className={r.bestReturn >= 0 ? 'text-red-400' : 'text-emerald-400'}>
+                                                        {r.bestReturn >= 0 ? '+' : ''}{r.bestReturn.toFixed(2)}%
+                                                    </span>
+                                                </td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-sky-400">{r.bestBias5 !== null ? `${r.bestBias5.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-violet-400">{r.bestBias10 !== null ? `${r.bestBias10.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-slate-400">{r.bestBias20 !== null ? `${r.bestBias20.toFixed(1)}%` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestRsi != null ? r.bestRsi.toFixed(1) : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestSlopeUpDays != null ? `${r.bestSlopeUpDays}天` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestForeignConsecBuy != null ? `${r.bestForeignConsecBuy}天` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestTrustConsecBuy != null ? `${r.bestTrustConsecBuy}天` : '-'}</td>
+                                                <td className="py-2 px-3 text-center font-mono text-xs text-amber-300">{r.bestMarginConsecIncrease != null ? `${r.bestMarginConsecIncrease}天` : '-'}</td>
+                                                <td className="py-2 px-3 text-right font-mono text-sm font-bold">
+                                                    <span className={r.improvement > 0.5 ? 'text-amber-400' : r.improvement > 0 ? 'text-slate-300' : 'text-slate-500'}>
+                                                        {r.improvement > 0 ? '+' : ''}{r.improvement.toFixed(2)}%
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </>
                 )}
             </div>
@@ -2342,10 +2325,10 @@ const ExitAnalysisSection: React.FC<{ results: ExitWindowResult[] | null }> = ({
     );
 };
 
-const StatCard = ({ label, value, sub, color = 'text-white' }: { label: string; value: string; sub?: string; color?: string }) => (
-    <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4">
-        <div className="text-xs text-slate-400 mb-1">{label}</div>
-        <div className={`text-xl font-bold ${color}`}>{value}</div>
+const StatCard = ({ label, value, sub, color = 'text-white', compact = false }: { label: string; value: string; sub?: string; color?: string; compact?: boolean }) => (
+    <div className={`bg-slate-800/60 border border-slate-700 rounded-xl ${compact ? 'p-2.5' : 'p-4'}`}>
+        <div className={`text-slate-400 mb-0.5 ${compact ? 'text-[10px]' : 'text-xs mb-1'}`}>{label}</div>
+        <div className={`font-bold ${compact ? 'text-sm' : 'text-xl'} ${color}`}>{value}</div>
         {sub && <div className="text-xs text-slate-500 mt-0.5">{sub}</div>}
     </div>
 );
@@ -2531,7 +2514,7 @@ const DivergenceAnalysisSection: React.FC<{
     if (!buyStats && !sellDivergence && !stopLossDivergence) {
         return (
             <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8 text-center text-slate-500 text-sm">
-                尚無可比對資料 — 請先執行上方「開始分析」，並至「DSS 回測分析」執行一次回測
+                尚無可比對資料 — 請先執行上方「開始分析」，並至「回測吻合分析」執行一次回測
             </div>
         );
     }
@@ -2544,6 +2527,9 @@ const DivergenceAnalysisSection: React.FC<{
 
     return (
         <div className="space-y-6">
+            <div className="text-xs text-slate-300 bg-sky-500/10 border border-sky-500/30 rounded-lg px-3 py-2 leading-relaxed">
+                <b className="text-sky-300">這裡在做什麼：</b>比對你「實際下單的那一天」跟「事後回頭看最好的那一天」差了多少——買進分成誤判（訊號說買、結果虧錢）、漏判（訊號沒說買、結果卻賺）、時點偏移（方向對但下手時機差太多天）；出場同理分過早/過晚。用來檢查操作習慣跟系統建議的落差在哪。
+            </div>
             {buyStats && (
                 <div className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden">
                     <div className="p-4 border-b border-slate-700 flex items-center gap-2">
@@ -2632,7 +2618,7 @@ const DivergenceAnalysisSection: React.FC<{
                 </div>
             )}
             <p className="text-xs text-slate-600">
-                各分類上方的中位數為該分類母體（誤判/漏判/時點偏移/過早/過晚）自身的技術面/籌碼面中位數，僅供對照「±N日最佳進場分析」/「出場分析」頁籤中的整體中位數參考，尚未自動套用或寫入設定檔；分位數修正與自動收斂迴圈仍維持暫停（如需要可再討論）。
+                各分類上方的中位數為該分類母體（誤判/漏判/時點偏移/過早/過晚）自身的技術面/籌碼面中位數，僅供對照「進場分析」/「出場分析」頁籤中的整體中位數參考，尚未自動套用或寫入設定檔；分位數修正與自動收斂迴圈仍維持暫停（如需要可再討論）。
             </p>
         </div>
     );
@@ -2764,6 +2750,9 @@ const ForwardReturnSection: React.FC<{
                     </div>
                 ) : (
                     <>
+                        <div className="text-xs text-slate-300 bg-sky-500/10 border border-sky-500/30 rounded-lg px-3 py-2 leading-relaxed">
+                            <b className="text-sky-300">這裡在做什麼：</b>不看你的交易，改看「乖離率跌到某個區間之後，接下來 N 天市場實際發生了什麼」，用來驗證「乖離越深越該買」這個假設是否成立、以及該不該用這個當進場門檻。
+                        </div>
                         <div className="text-xs text-amber-300/80 bg-amber-500/10 border border-amber-500/30 rounded-lg px-3 py-2">
                             選樣偏誤提醒：資料源為既有原始資料快取，僅涵蓋「歷史交易日附近時段＋前置緩衝」，非完整市場歷史。
                             結論僅適用於類似的時段分佈；FinMind 額度充足時可改抓完整 3 年日線再驗證一次。
@@ -2818,12 +2807,13 @@ const ForwardReturnSection: React.FC<{
                             </table>
                         </div>
 
-                        <div className="pt-3 border-t border-slate-700 space-y-2">
-                            <div className="flex items-center gap-2">
+                        <details className="pt-3 border-t border-slate-700 space-y-2 group">
+                            <summary className="cursor-pointer list-none flex items-center gap-2 flex-wrap">
                                 <h4 className="text-sm font-bold text-slate-200">RSI 增量資訊檢驗</h4>
                                 <span className="text-xs text-slate-500">同一 Bias20 桶內，RSI &lt; {RSI_SPLIT_THRESHOLD} 是否帶來額外報酬差異？（供第二階段「RSI 增量價值」判斷）</span>
-                            </div>
-                            <div className="overflow-x-auto">
+                                <span className="text-[10px] text-slate-600 ml-auto group-open:hidden">點開看細節 ▸</span>
+                            </summary>
+                            <div className="overflow-x-auto mt-2">
                                 <table className="w-full text-left">
                                     <thead>
                                         <tr className="text-xs text-slate-400 border-b border-slate-700">
@@ -2855,7 +2845,7 @@ const ForwardReturnSection: React.FC<{
                                     </tbody>
                                 </table>
                             </div>
-                        </div>
+                        </details>
 
                         <p className="text-[10px] text-slate-600 leading-relaxed">
                             解讀：報酬隨 Bias20 越深單調遞增 → 假設成立，可用資料驅動門檻；各桶差不多 → Bias20 無預測力；
@@ -2961,7 +2951,8 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
     const [sortKey, setSortKey] = useState<SortKey>('trades');
     const [sortAsc, setSortAsc] = useState(false);
     const [expandedSymbol, setExpandedSymbol] = useState<string | null>(null);
-    const [activeSection, setActiveSection] = useState<'winrate' | 'optimal' | 'exit' | 'divergence' | 'forward' | 'backtest' | 'summary' | 'tracker' | 'params'>('winrate');
+    const [activeSection, setActiveSection] = useState<SectionKey>('winrate');
+    const activeGroup = TAB_GROUPS.find(g => g.tabs.some(t => t.key === activeSection)) ?? TAB_GROUPS[0];
 
     const OPTIMAL_CACHE_KEY = 'ft_dsslab_optimal_cache';
     const EXIT_CACHE_KEY = 'ft_dsslab_exit_cache';
@@ -3250,10 +3241,18 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
             };
         });
         if (Object.keys(cats).length === 0) return;
+        const allDates = [
+            ...(optimalResults?.map(r => r.buyDate) ?? []),
+            ...(optimalResults?.map(r => r.sellDate) ?? []),
+            ...(exitResults?.map(r => r.buyDate) ?? []),
+            ...(exitResults?.map(r => r.sellDate) ?? []),
+        ];
+        const dataAsOf = allDates.length ? allDates.reduce((m, d) => d > m ? d : m) : undefined;
         const profile: DSSProfile = {
             id: crypto.randomUUID(),
             name: `優化參數 ${new Date().toLocaleDateString('zh-TW')}`,
             createdAt: Date.now(),
+            dataAsOf,
             source: { total: filteredTrades.length, matched: optimalResults?.length ?? exitResults?.length ?? 0 },
             categories: cats,
         };
@@ -3319,53 +3318,45 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                 </div>
             </div>
 
-            {/* Section Tabs - 常駐，不受完整交易紀錄多寡影響，DSS 回測分析不需配對交易也能使用 */}
-            <div className="flex gap-2 border-b border-slate-800">
-                {([
-                    { key: 'winrate', label: '標的勝率排行', icon: Trophy },
-                    { key: 'optimal', label: '±N日最佳進場分析', icon: Zap },
-                    { key: 'exit', label: '出場分析', icon: Target },
-                    { key: 'divergence', label: '背離分析', icon: BarChart2 },
-                    { key: 'forward', label: '前瞻報酬', icon: TrendingUp },
-                    { key: 'backtest', label: 'DSS 回測分析', icon: History },
-                    { key: 'summary', label: '分析摘要', icon: ClipboardList },
-                    { key: 'params', label: '參數建議', icon: SlidersHorizontal },
-                    { key: 'tracker', label: '訊號成效', icon: Activity },
-                ] as const).map(({ key, label, icon: Icon }) => (
-                    <button key={key} onClick={() => setActiveSection(key)}
-                        className={`flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-t-lg transition-colors ${activeSection === key ? 'bg-slate-800/50 text-violet-400 border-b-2 border-violet-400' : 'text-slate-500 hover:text-slate-300'}`}>
-                        <Icon size={16} /> {label}
-                    </button>
-                ))}
-            </div>
-
-            {/* 全域數據工具列：分析 + 儲存為設定檔 + 匯出/匯入全域數據，常駐於上方，供進場/出場/DSS回測分析三處共用 */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-4 flex items-center gap-3 flex-wrap">
-                <span className="text-sm text-slate-400">視窗範圍：±{WINDOW_DAYS} 日（進場+出場一起分析）</span>
-                <button onClick={handleRunAnalysis} disabled={analysisRunning}
-                    className="px-4 py-1.5 rounded-lg text-sm font-bold bg-violet-600 hover:bg-violet-500 text-white border border-violet-500 disabled:opacity-50 flex items-center gap-2 transition-all">
-                    {analysisRunning ? <><Loader2 size={14} className="animate-spin" />分析中…</> : '開始分析'}
-                </button>
-                {analysisProgress && <span className="text-xs text-slate-400">{analysisProgress.done}/{analysisProgress.total} 標的</span>}
-                {analysisTs && !analysisRunning && <span className="text-xs text-slate-500">上次分析：{new Date(analysisTs).toLocaleString('zh-TW', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}</span>}
-                <div className="ml-auto flex items-center gap-2">
-                    {savedProfileMsg && <span className="text-xs text-emerald-400">{savedProfileMsg}</span>}
-                    {(optimalResults?.length || exitResults?.length) ? (
-                        <button onClick={handleSaveOptimalProfile}
-                            className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-violet-600/20 hover:bg-violet-600/40 border border-violet-500/30 text-violet-300 rounded-lg transition-colors">
-                            <Save size={12} />儲存為設定檔
+            {/* Section Tabs - 常駐，不受完整交易紀錄多寡影響，DSS 回測分析不需配對交易也能使用
+                第一層：分組（右側常駐分析/匯出/匯入工具列）；第二層：組內子分頁（只有一項時不顯示第二層） */}
+            <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-800">
+                <div className="flex gap-2">
+                    {TAB_GROUPS.map(g => (
+                        <button key={g.key} onClick={() => setActiveSection(g.tabs[0].key)}
+                            className={`flex items-center gap-1.5 px-4 py-2 text-sm font-bold rounded-t-lg transition-colors ${activeGroup.key === g.key ? 'bg-slate-800/50 text-violet-400 border-b-2 border-violet-400' : 'text-slate-500 hover:text-slate-300'}`}>
+                            {g.label}
                         </button>
-                    ) : null}
-                    <button onClick={handleExportAnalysis}
-                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-slate-300 rounded-lg transition-colors">
-                        <Download size={12} />匯出全域數據
+                    ))}
+                </div>
+                <div className="flex items-center gap-2 pb-2 flex-wrap">
+                    <span className="text-xs text-slate-500" title="進場+出場分析視窗天數">±{WINDOW_DAYS}日</span>
+                    <button onClick={handleRunAnalysis} disabled={analysisRunning}
+                        className="px-3 py-1.5 rounded-lg text-xs font-bold bg-violet-600 hover:bg-violet-500 text-white border border-violet-500 disabled:opacity-50 flex items-center gap-1.5 transition-all">
+                        {analysisRunning ? <><Loader2 size={12} className="animate-spin" />分析中…</> : '開始分析'}
                     </button>
-                    <label className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-slate-300 rounded-lg transition-colors cursor-pointer">
-                        <Upload size={12} />匯入全域數據
+                    {analysisProgress && <span className="text-[11px] text-slate-400">{analysisProgress.done}/{analysisProgress.total}</span>}
+                    {analysisTs && !analysisRunning && <span className="text-[11px] text-slate-500">上次：{new Date(analysisTs).toLocaleString('zh-TW', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' })}</span>}
+                    <button onClick={handleExportAnalysis}
+                        className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-slate-300 rounded-lg transition-colors">
+                        <Download size={12} />匯出
+                    </button>
+                    <label className="flex items-center gap-1 text-xs px-2.5 py-1.5 bg-slate-700/50 hover:bg-slate-700 border border-slate-600 text-slate-300 rounded-lg transition-colors cursor-pointer">
+                        <Upload size={12} />匯入
                         <input type="file" accept="application/json" className="hidden" onChange={handleImportAnalysis} />
                     </label>
                 </div>
             </div>
+            {activeGroup.tabs.length > 1 && (
+                <div className="flex gap-1.5 flex-wrap -mt-3">
+                    {activeGroup.tabs.map(({ key, label, icon: Icon }) => (
+                        <button key={key} onClick={() => setActiveSection(key)}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${activeSection === key ? 'bg-violet-600/20 text-violet-300 border-violet-500/40' : 'text-slate-500 border-transparent hover:text-slate-300 hover:border-slate-700'}`}>
+                            <Icon size={14} /> {label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
             {activeSection === 'backtest' ? (
                 <BacktestView allTransactions={stockTransactions} filteredTransactions={stockTransactions} />
@@ -3373,6 +3364,8 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                 <SignalTrackerSection />
             ) : activeSection === 'params' ? (
                 <ParamRecommendationSection optimalResults={optimalResults} exitResults={exitResults} onSave={handleSaveOptimalProfile} savedMsg={savedProfileMsg} />
+            ) : activeSection === 'summary' ? (
+                <ParamDiagnosisSummary optimalResults={optimalResults} />
             ) : allCompleted.length === 0 ? (
                 <div className="text-center py-20 text-slate-500">
                     <FlaskConical size={40} className="mx-auto mb-3 opacity-30" />
@@ -3380,7 +3373,8 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                 </div>
             ) : (
                 <>
-                    {/* Category Filter */}
+                    {/* Category Filter + Summary Cards：只跟「標的勝率排行」有關，其餘子分頁各自獨立分析、不受這裡篩選 */}
+                    {activeSection === 'winrate' && (
                     <div className="flex items-center gap-2">
                         {(['ALL', 'ETF', '上市', '上櫃'] as CategoryFilter[]).map(cat => (
                             <button key={cat} onClick={() => setCategoryFilter(cat)}
@@ -3390,9 +3384,9 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                         ))}
                         <span className="ml-auto text-xs text-slate-500">{filteredTrades.length} 筆完整交易</span>
                     </div>
+                    )}
 
-                    {/* Summary Cards */}
-                    {summary && (
+                    {activeSection === 'winrate' && summary && (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                             <StatCard label="整體勝率" value={`${summary.winRate.toFixed(1)}%`}
                                 sub={`${filteredTrades.filter(t => t.realizedProfit > 0).length} 勝 / ${filteredTrades.filter(t => t.realizedProfit <= 0).length} 敗`}
@@ -3518,7 +3512,6 @@ export const DSSLab: React.FC<Props> = ({ stockTransactions }) => {
                     {activeSection === 'exit' && <ExitAnalysisSection results={exitResults} />}
                     {activeSection === 'divergence' && <DivergenceAnalysisSection completedTrades={allCompleted} optimalResults={optimalResults} exitResults={exitResults} />}
                     {activeSection === 'forward' && <ForwardReturnSection completedTrades={allCompleted} optimalCatStats={parentOptimalCatStats} exitCatStats={parentExitCatStats} />}
-                    {activeSection === 'summary' && <ParamDiagnosisSummary optimalResults={optimalResults} />}
                 </>
             )}
         </div>

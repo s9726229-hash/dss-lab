@@ -73,7 +73,7 @@ const DSSLabParamGuide: React.FC = () => (
                     <rect x="155" y="80" width="376" height="48" rx="8" fill="rgba(109,40,217,0.1)" stroke="rgba(109,40,217,0.45)" strokeWidth="1"/>
                     <text x="343" y="100" textAnchor="middle" fill="#a78bfa" fontSize="11" fontWeight="bold">統計驗證（2026-07-13）</text>
                     <text x="343" y="116" textAnchor="middle" fill="#64748b" fontSize="9">驗證期 30% 純計算檢驗  ⊕  前瞻報酬分析  ⊕  RSI / 斜率增量價值分析</text>
-                    <text x="343" y="128" textAnchor="middle" fill="#475569" fontSize="9">→ 詳見「分析摘要」分頁</text>
+                    <text x="343" y="128" textAnchor="middle" fill="#475569" fontSize="9">→ 詳見「驗證明細」分頁</text>
                 </svg>
             </div>
         </div>
@@ -185,7 +185,7 @@ const DSSLabParamGuide: React.FC = () => (
                         ⑩ 參數版本化（不同 DSSProfile 互比績效）。
                     </div>
                 </div>
-                <p className="text-[11px] text-slate-500">詳細數字見 DSS 實驗室 → <b>分析摘要</b> 分頁。</p>
+                <p className="text-[11px] text-slate-500">詳細數字見 DSS 實驗室 → 參數建議 → <b>驗證明細</b> 分頁。</p>
             </div>
         </div>
 
@@ -262,11 +262,6 @@ export const TechDocs: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
 
                     {/* 買進類 */}
-                    <div className="bg-slate-900/50 p-3 rounded-xl border border-red-500/30">
-                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-red-500/20 text-red-400">🚀 強力布局</span>
-                        <p className="text-[11px] text-slate-400 mt-1.5">Bias≤強買門檻＋RSI＋斜率↑＋外資投信同買，最高優先做多訊號。</p>
-                    </div>
-
                     <div className="bg-slate-900/50 p-3 rounded-xl border border-rose-500/20">
                         <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-rose-500/20 text-rose-400">🔴 適合布局</span>
                         <p className="text-[11px] text-slate-400 mt-1.5">Bias≤買進門檻＋斜率反轉＋RSI達標，技術面基礎布局條件成立。</p>
@@ -284,12 +279,12 @@ export const TechDocs: React.FC = () => {
 
                     <div className="bg-slate-900/50 p-3 rounded-xl border border-orange-500/20">
                         <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-orange-500/20 text-orange-400">🟠 持續觀察</span>
-                        <p className="text-[11px] text-slate-400 mt-1.5">原訊號偏多但外資連賣≥{p.chipInstDays}日＋融資連增≥{p.chipMarginDays}日，籌碼背離降級觀察。</p>
+                        <p className="text-[11px] text-slate-400 mt-1.5">原訊號偏多但外資連賣＋融資連增達門檻天數（各分類獨立設定，見設定頁），籌碼背離降級觀察。</p>
                     </div>
 
                     <div className="bg-slate-900/50 p-3 rounded-xl border border-green-500/20">
-                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-500/20 text-green-400">🟢 強制停利 / 建議賣出</span>
-                        <p className="text-[11px] text-slate-400 mt-1.5">Bias≥強制門檻或法人雙向棄守，建議清倉出局。</p>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-green-500/20 text-green-400">🟢 強制停利</span>
+                        <p className="text-[11px] text-slate-400 mt-1.5">Bias≥強制門檻，建議清倉出局。</p>
                     </div>
 
                     <div className="bg-slate-900/50 p-3 rounded-xl border border-green-700/50">
@@ -309,7 +304,7 @@ export const TechDocs: React.FC = () => {
                         { step: '1', color: 'emerald', title: '大盤偵測', desc: 'TWII Bias20：≤-5% 保守、≤-10% 防禦（防禦阻斷所有買進）' },
                         { step: '2', color: 'amber', title: '第一軌 技術面', desc: '依資產類別比對乖離率 / 斜率 / RSI，產生基礎燈號' },
                         { step: '3', color: 'sky', title: '第二軌 籌碼面', desc: 'FinMind API：外資投信連買賣天數（設定值）+ 融資連增/連減天數（設定值）' },
-                        { step: '4', color: 'indigo', title: '共振 / 背離修正', desc: '法人共振→升級；外資賣+融資連增≥門檻→降級觀察' },
+                        { step: '4', color: 'indigo', title: '背離修正', desc: '外資賣+融資連增≥門檻→降級觀察（外資/投信共振・棄守僅作籌碼提示，不覆寫燈號）' },
                         { step: '5', color: 'violet', title: '醞釀訊號分析', desc: '無訊號時，乖離/RSI/斜率任一項達標即提示醞釀方向' },
                         { step: '6', color: 'rose', title: '最終決策（人類）', desc: '系統輔助，買賣操作仍由使用者自行判斷' },
                     ].map(({ step, color, title, desc }) => (
@@ -420,7 +415,7 @@ export const TechDocs: React.FC = () => {
                 <h3 className="text-lg font-bold text-slate-200 mb-3 flex items-center gap-2">
                     <TrendingUp className="text-purple-400" /> 第二軌：籌碼面輔助確認邏輯
                 </h3>
-                <p className="text-xs text-slate-400 mb-4">資料來源：FinMind API。追蹤外資/投信連買賣天數（設定值 {p.chipInstDays} 日視為表態）與融資連增/連減天數（設定值 {p.chipMarginDays} 日）。</p>
+                <p className="text-xs text-slate-400 mb-4">資料來源：FinMind API。追蹤外資/投信連買賣天數與融資連增/連減天數，門檻依 ETF/上市/上櫃分類獨立設定（見設定頁「籌碼參數」）。</p>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm border-collapse">
                         <thead className="bg-slate-900/50 text-slate-400 text-xs">
@@ -432,34 +427,20 @@ export const TechDocs: React.FC = () => {
                         </thead>
                         <tbody className="text-slate-300 text-xs">
                             <tr>
-                                <td className="p-2 border border-slate-700"><span className="text-red-400 font-bold">🔴 籌碼共振</span><br/><span className="text-slate-500 text-[10px]">升級</span></td>
-                                <td className="p-2 border border-slate-700">
-                                    原訊號偏多<br/>
-                                    <b className="text-white">且</b> 外資連買 ≥ {p.chipInstDays}日<br/>
-                                    <b className="text-white">且</b> 投信連買 ≥ {p.chipInstDays}日
-                                </td>
-                                <td className="p-2 border border-slate-700">升級為 <span className="text-red-400 font-bold bg-red-500/10 px-1 rounded">🚀 強力布局</span>，法人雙向認同，勝率顯著提升。</td>
-                            </tr>
-                            <tr>
                                 <td className="p-2 border border-slate-700"><span className="text-orange-400 font-bold">🟠 籌碼背離</span><br/><span className="text-slate-500 text-[10px]">降級</span></td>
                                 <td className="p-2 border border-slate-700">
                                     原訊號偏多<br/>
-                                    <b className="text-white">但</b> 外資連賣 ≥ {p.chipInstDays}日<br/>
-                                    <b className="text-white">且</b> 融資連增 <b className="text-amber-400">≥ {p.chipMarginDays}日</b>（散戶追高）
+                                    <b className="text-white">但</b> 外資連賣 ≥ 門檻天數<br/>
+                                    <b className="text-white">且</b> 融資連增 <b className="text-amber-400">≥ 門檻天數</b>（散戶追高）
                                 </td>
-                                <td className="p-2 border border-slate-700">降級為 <span className="text-orange-400 font-bold bg-orange-500/10 px-1 rounded">🟠 持續觀察</span>，法人出、散戶接，謹慎。</td>
-                            </tr>
-                            <tr>
-                                <td className="p-2 border border-slate-700"><span className="text-emerald-400 font-bold">🟢 主力棄守</span><br/><span className="text-slate-500 text-[10px]">警報</span></td>
-                                <td className="p-2 border border-slate-700">
-                                    原訊號偏弱/中性<br/>
-                                    <b className="text-white">且</b> 外資連賣 ≥ {p.chipInstDays}日<br/>
-                                    <b className="text-white">且</b> 投信連賣 ≥ {p.chipInstDays}日
-                                </td>
-                                <td className="p-2 border border-slate-700">強制轉為 <span className="text-emerald-400 font-bold bg-emerald-500/10 px-1 rounded">🟢 建議賣出</span>，外資投信同步撤退。</td>
+                                <td className="p-2 border border-slate-700">降級為 <span className="text-orange-400 font-bold bg-orange-500/10 px-1 rounded">🟠 持續觀察</span>，外資投信出、散戶接，謹慎。</td>
                             </tr>
                         </tbody>
                     </table>
+                </div>
+                <div className="mt-3 p-3 bg-slate-900/60 rounded-lg border border-slate-700 text-xs text-slate-400">
+                    <b className="text-slate-300">為何只有「籌碼背離」會覆寫燈號：</b>
+                    統計驗證（⑥籌碼覆寫規則增量分析）顯示「融資連增背離降級」在上市、ETF 有穩固的報酬/勝率支撐；但「外資/投信共振升級」與「外資/投信同步棄守」三個分類皆方向不一致、無穩健統計支撐（例如上櫃外資連買≥3天報酬反而低於0天）。因此外資/投信連買賣天數<b className="text-slate-300">只用於下方 ChipHint 籌碼提示，不再覆寫主燈號</b>，避免把沒有證據支撐的規則包裝成強制訊號。
                 </div>
                 <div className="mt-3 p-3 bg-slate-900/60 rounded-lg border border-slate-700 text-xs text-slate-400">
                     <b className="text-slate-300">UI 顯示：</b> 外資/投信/融資若觸發條件，欄位會亮起底色，並顯示小文字提示，例如
@@ -475,7 +456,7 @@ export const TechDocs: React.FC = () => {
                     <Zap className="text-purple-400" /> 籌碼常駐偵測（ChipHint）：獨立於主燈號之外
                 </h3>
                 <p className="text-xs text-slate-400 mb-4">
-                    ChipHint 對<b className="text-slate-300">所有訊號狀態</b>都持續維護，不被主燈號覆寫。即使主訊號是「強力布局」或「停損預警」，籌碼燈號欄仍會獨立顯示當前籌碼狀態。偵測優先順序：強烈警示 → 背離警示 → 中性評分。
+                    ChipHint 對<b className="text-slate-300">所有訊號狀態</b>都持續維護，不被主燈號覆寫。即使主訊號是「強力買進」或「停損預警」，籌碼燈號欄仍會獨立顯示當前籌碼狀態。偵測優先順序：強烈警示 → 背離警示 → 中性評分。外資/投信/融資門檻依 ETF/上市/上櫃分類獨立設定（見設定頁「籌碼參數」）。
                 </p>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm border-collapse">
@@ -488,18 +469,18 @@ export const TechDocs: React.FC = () => {
                         </thead>
                         <tbody className="text-slate-300 text-xs">
                             <tr>
-                                <td className="p-2 border border-slate-700"><span className="text-emerald-400 font-bold">🟢 法人棄守</span></td>
-                                <td className="p-2 border border-slate-700">外資連賣 ≥ {p.chipInstDays}日 <b className="text-white">且</b> 投信連賣 ≥ {p.chipInstDays}日</td>
+                                <td className="p-2 border border-slate-700"><span className="text-emerald-400 font-bold">🟢 外資投信棄守</span></td>
+                                <td className="p-2 border border-slate-700">外資連賣 ≥ 門檻天數 <b className="text-white">且</b> 投信連賣 ≥ 門檻天數</td>
                                 <td className="p-2 border border-slate-700 text-slate-400">第 1 優先（最高警示）</td>
                             </tr>
                             <tr>
                                 <td className="p-2 border border-slate-700"><span className="text-orange-400 font-bold">🟠 籌碼疑慮</span></td>
-                                <td className="p-2 border border-slate-700">外資連賣 ≥ {p.chipInstDays}日 <b className="text-white">且</b> 融資連增 ≥ {p.chipMarginDays}日</td>
+                                <td className="p-2 border border-slate-700">外資連賣 ≥ 門檻天數 <b className="text-white">且</b> 融資連增 ≥ 門檻天數</td>
                                 <td className="p-2 border border-slate-700 text-slate-400">第 2 優先</td>
                             </tr>
                             <tr>
                                 <td className="p-2 border border-slate-700"><span className="text-rose-400 font-bold">🔴 籌碼偏多</span></td>
-                                <td className="p-2 border border-slate-700">三項中 ≥ 2 項成立：外資連買≥{p.chipInstDays}日、投信連買≥{p.chipInstDays}日、融資連增≥1日</td>
+                                <td className="p-2 border border-slate-700">三項中 ≥ 2 項成立：外資連買≥門檻天數、投信連買≥門檻天數、融資連增≥1日</td>
                                 <td className="p-2 border border-slate-700 text-slate-400">中性評分（≥2項偏多）</td>
                             </tr>
                             <tr>
@@ -522,7 +503,7 @@ export const TechDocs: React.FC = () => {
                 </div>
                 <div className="mt-3 p-3 bg-slate-900/60 rounded-lg border border-slate-700 text-xs text-slate-400">
                     <b className="text-slate-300">醞釀訊號與 ChipHint 的關係：</b>
-                    當技術面顯示「醞釀買進/強買」但籌碼覆寫為「籌碼疑慮」或「法人棄守」時，醞釀提示仍會保留在訊號欄，ChipHint 同步顯示籌碼警示。兩者各自獨立，讓使用者同時掌握技術面機會與籌碼面風險。
+                    當技術面顯示「醞釀買進/強買」但籌碼覆寫為「籌碼疑慮」或「外資投信棄守」時，醞釀提示仍會保留在訊號欄，ChipHint 同步顯示籌碼警示。兩者各自獨立，讓使用者同時掌握技術面機會與籌碼面風險。
                 </div>
             </div>
 
@@ -578,20 +559,14 @@ export const TechDocs: React.FC = () => {
                                 </td>
                                 <td className="p-2 border border-slate-700">
                                     外資投信同步連買時附註<br/><span className="text-rose-400/70 text-[10px]">⚡ 籌碼共振（機構承接，仍屬高位）</span><br/>
-                                    外資投信同步連賣時附註<br/><span className="text-emerald-400/70 text-[10px]">⚡ 法人同步棄守 強烈建議出場</span>
+                                    外資投信同步連賣時附註<br/><span className="text-emerald-400/70 text-[10px]">⚡ 外資投信同步棄守 強烈建議出場</span>
                                 </td>
                             </tr>
                             <tr>
                                 <td className="p-2 border border-slate-700"><span className="text-orange-400 font-bold">🟠 籌碼疑慮</span></td>
-                                <td className="p-2 border border-slate-700">原訊號偏多<br/><b className="text-white">但</b> 外資連賣 ≥ {p.chipInstDays}日 + 融資連增 ≥ {p.chipMarginDays}日</td>
-                                <td className="p-2 border border-slate-700 font-mono text-[10px]">chipInstDays = {p.chipInstDays}日<br/>chipMarginDays = {p.chipMarginDays}日</td>
+                                <td className="p-2 border border-slate-700">原訊號偏多<br/><b className="text-white">但</b> 外資連賣 ≥ 門檻天數 + 融資連增 ≥ 門檻天數</td>
+                                <td className="p-2 border border-slate-700 font-mono text-[10px]">依 ETF/上市/上櫃 分類設定</td>
                                 <td className="p-2 border border-slate-700 text-slate-400">籌碼背離強制降級</td>
-                            </tr>
-                            <tr>
-                                <td className="p-2 border border-slate-700"><span className="text-emerald-400 font-bold">⛔ 法人棄守</span></td>
-                                <td className="p-2 border border-slate-700">外資連賣 ≥ {p.chipInstDays}日<br/><b className="text-white">且</b> 投信連賣 ≥ {p.chipInstDays}日</td>
-                                <td className="p-2 border border-slate-700 font-mono text-[10px]">chipInstDays = {p.chipInstDays}日</td>
-                                <td className="p-2 border border-slate-700 text-slate-400">法人雙向棄守，強制覆寫</td>
                             </tr>
                         </tbody>
                     </table>

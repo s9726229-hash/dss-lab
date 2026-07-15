@@ -68,7 +68,7 @@ export interface Asset {
 
   // --- V7.1.0 Technical Monitor ---
   rsi?: number;
-  techSignal?: 'STRONG_BUY' | 'BUY' | 'PARTIAL_SELL' | 'FORCE_SELL' | 'STOP_LOSS' | 'NONE' | 'SECOND_PARTIAL_SELL' | 'STOP_LOSS_ALERT' | 'RISK_ALERT' | 'WATCH' | 'SELL' | 'STRONG_LAYOUT' | 'WATCH_DIVERGE';
+  techSignal?: 'STRONG_BUY' | 'BUY' | 'PARTIAL_SELL' | 'FORCE_SELL' | 'STOP_LOSS' | 'NONE' | 'SECOND_PARTIAL_SELL' | 'STOP_LOSS_ALERT' | 'RISK_ALERT' | 'WATCH' | 'WATCH_DIVERGE';
   biasSlopes?: number[]; // Index 0: today's slope, 1: yesterday's, 2: day before yesterday
   ma20Slope?: number;
   ma60?: number;
@@ -146,9 +146,14 @@ export interface TechParameters {
     smallCapStrongBuySlopeDays: number;
     smallCapPartialSellSlopeDays: number; // 新增：停利時需連幾天斜率向下
 
-    // 籌碼面
-    chipInstDays: number;     // 法人累積天數
-    chipMarginDays: number;   // 融資計算天數
+    // 籌碼面：外資/投信累積天數（僅用於籌碼提示 ChipHint 與 FORCE_SELL 附註，不覆寫主燈號，三類別無統計支撐，維持手動）
+    etfChipInstDays: number;
+    largeCapChipInstDays: number;
+    smallCapChipInstDays: number;
+    // 籌碼面：融資連增/連減天數（觸發籌碼背離降級 WATCH_DIVERGE；上市/ETF 有分析支撐可自動套用，上櫃僅供手動調整）
+    etfChipMarginDays: number;
+    largeCapChipMarginDays: number;
+    smallCapChipMarginDays: number;
 }
 
 export enum MarketRegime {
@@ -197,7 +202,7 @@ export interface TechDataResult {
     dailyChangeRatio: number | null;
     dailyChange: number | null;
     sizeCategory: 'LARGE_CAP' | 'SMALL_CAP' | 'ETF' | 'UNKNOWN';
-    techSignal: 'STRONG_BUY' | 'BUY' | 'PARTIAL_SELL' | 'FORCE_SELL' | 'STOP_LOSS' | 'NONE' | 'SECOND_PARTIAL_SELL' | 'STOP_LOSS_ALERT' | 'RISK_ALERT' | 'WATCH' | 'SELL' | 'STRONG_LAYOUT' | 'WATCH_DIVERGE';
+    techSignal: 'STRONG_BUY' | 'BUY' | 'PARTIAL_SELL' | 'FORCE_SELL' | 'STOP_LOSS' | 'NONE' | 'SECOND_PARTIAL_SELL' | 'STOP_LOSS_ALERT' | 'RISK_ALERT' | 'WATCH' | 'WATCH_DIVERGE';
     currentPrice?: number;
     marketRegime?: MarketRegime;
     riskAlerts?: RiskAlerts;

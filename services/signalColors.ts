@@ -11,21 +11,19 @@
  */
 
 export type TechSignalKey =
-    | 'STRONG_BUY' | 'BUY' | 'STRONG_LAYOUT'
+    | 'STRONG_BUY' | 'BUY'
     | 'PARTIAL_SELL' | 'SECOND_PARTIAL_SELL' | 'FORCE_SELL'
     | 'STOP_LOSS' | 'STOP_LOSS_ALERT' | 'RISK_ALERT' | 'WATCH_DIVERGE'
-    | 'SELL' | 'WATCH' | 'NONE';
+    | 'WATCH' | 'NONE';
 
 /** 完整觸發時的訊號 badge 樣式（僅 badge 本身的底色/文字/邊框，不含儲存格外層底色） */
 export const TECH_SIGNAL_BADGE_CLASS: Partial<Record<TechSignalKey, string>> = {
     STRONG_BUY: 'bg-red-600/30 text-red-400 border border-red-500/50',
     BUY: 'bg-rose-500/20 text-rose-400 border border-rose-500/30',
-    STRONG_LAYOUT: 'bg-red-600/40 text-red-300 border border-red-400/60',
     PARTIAL_SELL: 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
     SECOND_PARTIAL_SELL: 'bg-orange-500/20 text-orange-400 border border-orange-500/30',
     WATCH_DIVERGE: 'bg-orange-500/20 text-orange-400 border border-orange-500/30',
     FORCE_SELL: 'bg-green-600/30 text-green-400 border border-green-500/50',
-    SELL: 'bg-green-700/30 text-green-400 border border-green-500/50',
     STOP_LOSS: 'bg-green-700/30 text-green-400 border border-green-500/50',
     STOP_LOSS_ALERT: 'bg-green-700 text-white border border-green-500 shadow-lg shadow-green-900/50',
 };

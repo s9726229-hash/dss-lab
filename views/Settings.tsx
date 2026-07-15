@@ -48,7 +48,8 @@ const DSSProfilesCard: React.FC<{ onApply: (p: DSSProfile) => void }> = ({ onApp
                         <div className="flex-1 min-w-0">
                             <div className="text-sm font-medium text-slate-200">{p.name}</div>
                             <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
-                                <span className="text-xs text-slate-500">{new Date(p.createdAt).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                <span className="text-xs text-slate-500">產生於 {new Date(p.createdAt).toLocaleString('zh-TW', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                {p.dataAsOf && <span className="text-xs text-amber-400/80">資料至 {p.dataAsOf}</span>}
                                 <span className="text-xs text-slate-500">比對 {p.source.matched}/{p.source.total} 筆</span>
                                 {(['ETF', '上市', '上櫃'] as const).map(cat => {
                                     const c = p.categories[cat];
@@ -61,7 +62,6 @@ const DSSProfilesCard: React.FC<{ onApply: (p: DSSProfile) => void }> = ({ onApp
                                             {c.strongBias20 !== undefined && ` ｜強買 B20&lt;${c.strongBias20.toFixed(1)}%`}
                                             {c.exitBias20 !== undefined && ` ｜停利 B20≥${c.exitBias20.toFixed(1)}%`}
                                             {c.exitForceBias20 !== undefined && ` ｜強制停利 B20≥${c.exitForceBias20.toFixed(1)}%`}
-                                            {c.stopLossBias20 !== undefined && ` ｜停損 B20≥${c.stopLossBias20.toFixed(1)}%`}
                                         </span>
                                     );
                                 })}
@@ -420,19 +420,25 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
                       <div className="grid grid-cols-[140px_1fr_1fr_1fr] gap-4 p-4 bg-slate-900/30 rounded-xl border border-indigo-500/30 mb-3 hover:bg-slate-900/50 transition-colors">
                           <div className="font-bold text-indigo-400 flex flex-col justify-center">
                               <span>📊 籌碼參數</span>
-                              <span className="text-[10px] text-slate-500 font-normal mt-1">DSS 第二軌共振</span>
+                              <span className="text-[10px] text-slate-500 font-normal mt-1">外資/投信僅作提示，不覆寫燈號；融資連增會觸發籌碼背離降級</span>
                           </div>
-                          
-                          {/* All categories share same chip settings */}
-                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-indigo-500/10 col-span-3 grid grid-cols-2 gap-4">
-                              <div className="flex flex-col gap-1">
-                                  <label className="text-[11px] text-slate-400">法人累積買賣超天數 (預設3天)</label>
-                                  <Input type="number" value={techParams.chipInstDays} onChange={e => setTechParams({...techParams, chipInstDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" />
-                              </div>
-                              <div className="flex flex-col gap-1">
-                                  <label className="text-[11px] text-slate-400">融資增減基期天數 (預設5天)</label>
-                                  <Input type="number" value={techParams.chipMarginDays} onChange={e => setTechParams({...techParams, chipMarginDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" />
-                              </div>
+
+                          {/* ETF Chip */}
+                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-indigo-500/10">
+                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">外資投信天數</label><Input type="number" value={techParams.etfChipInstDays} onChange={e => setTechParams({...techParams, etfChipInstDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">融資連增天數</label><Input type="number" value={techParams.etfChipMarginDays} onChange={e => setTechParams({...techParams, etfChipMarginDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                          </div>
+
+                          {/* Large Cap Chip */}
+                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-indigo-500/10">
+                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">外資投信天數</label><Input type="number" value={techParams.largeCapChipInstDays} onChange={e => setTechParams({...techParams, largeCapChipInstDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">融資連增天數</label><Input type="number" value={techParams.largeCapChipMarginDays} onChange={e => setTechParams({...techParams, largeCapChipMarginDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                          </div>
+
+                          {/* Small Cap Chip */}
+                          <div className="space-y-2 bg-black/20 p-3 rounded-lg border border-indigo-500/10">
+                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">外資投信天數</label><Input type="number" value={techParams.smallCapChipInstDays} onChange={e => setTechParams({...techParams, smallCapChipInstDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
+                              <div className="flex justify-between items-center"><label className="text-[11px] text-slate-400">融資連增天數</label><Input type="number" value={techParams.smallCapChipMarginDays} onChange={e => setTechParams({...techParams, smallCapChipMarginDays: Number(e.target.value)})} className="h-7 w-24 text-xs bg-black/50" /></div>
                           </div>
                       </div>
 
@@ -572,6 +578,7 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
               if (p.categories.ETF.strongSlopeUpDays !== undefined) next.etfStrongBuySlopeDays = p.categories.ETF.strongSlopeUpDays;
               if (p.categories.ETF.exitForceBias20 !== undefined) next.etfSecondPartialSellBias = p.categories.ETF.exitForceBias20;
               // ETF 無停損機制（視為長線持有），STOP LOSS / FORCE STOP LOSS 不套用
+              // 融資連增天數：⑥分析方向符合但樣本少（參數建議頁判定為「參考」），不自動套用，維持手動
           }
           if (p.categories['上市']) {
               next.largeCapBuyRsi  = p.categories['上市'].rsi;
@@ -582,7 +589,9 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
               if (p.categories['上市'].strongBias20 !== undefined) next.largeCapStrongBuyBias = p.categories['上市'].strongBias20;
               if (p.categories['上市'].strongSlopeUpDays !== undefined) next.largeCapStrongBuySlopeDays = p.categories['上市'].strongSlopeUpDays;
               if (p.categories['上市'].exitForceBias20 !== undefined) next.largeCapForceSellBias = p.categories['上市'].exitForceBias20;
-              if (p.categories['上市'].stopLossBias20 !== undefined) next.largeCapStopLossBias = p.categories['上市'].stopLossBias20;
+              // 停損乖離：虧損交易紀錄太少、且語意是「損失最小反彈日」而非「跌破警戒線」門檻，不自動套用，維持預設值
+              // 融資連增天數：⑥分析顯示上市最明顯（勝率82%→56%），自動套用訓練期中位數
+              if (p.categories['上市'].marginConsecIncrease !== undefined) next.largeCapChipMarginDays = Math.max(1, Math.round(p.categories['上市'].marginConsecIncrease));
           }
           if (p.categories['上櫃']) {
               next.smallCapBuyRsi  = p.categories['上櫃'].rsi;
@@ -593,7 +602,8 @@ export const Settings: React.FC<SettingsProps> = ({ onDataChange }) => {
               if (p.categories['上櫃'].strongBias20 !== undefined) next.smallCapStrongBuyBias = p.categories['上櫃'].strongBias20;
               if (p.categories['上櫃'].strongSlopeUpDays !== undefined) next.smallCapStrongBuySlopeDays = p.categories['上櫃'].strongSlopeUpDays;
               if (p.categories['上櫃'].exitForceBias20 !== undefined) next.smallCapForceSellBias = p.categories['上櫃'].exitForceBias20;
-              if (p.categories['上櫃'].stopLossBias20 !== undefined) next.smallCapStopLossBias = p.categories['上櫃'].stopLossBias20;
+              // 停損乖離：虧損交易紀錄太少、且語意是「損失最小反彈日」而非「跌破警戒線」門檻，不自動套用，維持預設值
+              // 融資連增天數：⑥分析顯示上櫃方向不一致、無穩健支撐，不自動套用，維持手動調整
           }
           saveTechParameters(next);
           setTechParams(next);

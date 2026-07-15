@@ -834,30 +834,17 @@ export const fetchTechnicalData = async (symbol: string, assets?: Asset[], trans
         // 保存技術面原始訊號（供醞釀提示使用，不受籌碼覆寫影響）
         const preChipSignal: string = techSignal;
 
-        // ── 第二軌：籌碼面共振 / 背離修正 ──
+        // ── 第二軌：籌碼面背離修正（僅融資連增有統計支撐會覆寫燈號；外資/投信共振・棄守僅作 ChipHint 提示，不覆寫燈號）──
+        const marginDaysThresh = sizeCategory === 'ETF' ? params.etfChipMarginDays : sizeCategory === 'LARGE_CAP' ? params.largeCapChipMarginDays : params.smallCapChipMarginDays;
+        const instThresh = sizeCategory === 'ETF' ? params.etfChipInstDays : sizeCategory === 'LARGE_CAP' ? params.largeCapChipInstDays : params.smallCapChipInstDays;
         if (instData) {
-            const instThresh = params.chipInstDays;
-            const instForeignBuy  = instData.foreignConsecBuy  >= instThresh;
             const instForeignSell = instData.foreignConsecSell >= instThresh;
-            const instTrustBuy    = instData.trustConsecBuy    >= instThresh;
-            const instTrustSell   = instData.trustConsecSell   >= instThresh;
-
             const isBullishSignal = ['STRONG_BUY', 'BUY'].includes(techSignal);
-            const isWeakOrNeutral = ['NONE', 'RISK_ALERT', 'PARTIAL_SELL'].includes(techSignal);
 
-            // 籌碼共振：原訊號偏多 && 外資+投信連買 ≥ chipInstDays → 升級強力布局
-            if (isBullishSignal && instForeignBuy && instTrustBuy) {
-                techSignal = 'STRONG_LAYOUT';
-            }
-            // 籌碼背離：原訊號偏多 && 外資連賣 && 融資連增 ≥ chipMarginDays → 降級持續觀察
-            else if (isBullishSignal && instForeignSell && marginConsecIncrease >= params.chipMarginDays) {
+            // 籌碼背離：原訊號偏多 && 外資連賣 && 融資連增 ≥ 門檻 → 降級持續觀察
+            if (isBullishSignal && instForeignSell && marginConsecIncrease >= marginDaysThresh) {
                 techSignal = 'WATCH_DIVERGE';
             }
-            // 主力棄守：原訊號偏弱/中性 && 外資+投信連賣 ≥ chipInstDays → 強制建議賣出
-            else if (isWeakOrNeutral && instForeignSell && instTrustSell) {
-                techSignal = 'SELL';
-            }
-            // FORCE_SELL + 籌碼共振/棄守：維持強制停利，但在 signalHint 加提示（見 buildTriggerConditions）
         }
 
         const riskAlerts: RiskAlerts = {
@@ -909,7 +896,7 @@ export const fetchTechnicalData = async (symbol: string, assets?: Asset[], trans
             const sellBias  = isETF ? params.etfPartialSellBias  : isLarge ? params.largeCapPartialSellBias  : params.smallCapPartialSellBias;
             const sell2Bias = isETF ? params.etfSecondPartialSellBias : isLarge ? params.largeCapForceSellBias  : params.smallCapForceSellBias;
             const sellSlopD = isETF ? params.etfPartialSellSlopeDays : isLarge ? params.largeCapPartialSellSlopeDays : params.smallCapPartialSellSlopeDays;
-            const chipDays  = params.chipInstDays;
+            const chipDays  = isETF ? params.etfChipInstDays : isLarge ? params.largeCapChipInstDays : params.smallCapChipInstDays;
 
             if (sizeCategory === 'ETF') {
                 if (techSignal === 'STRONG_BUY') return { target: '', type: 'BUY', conditions: [cond(`乖離 ≤ ${sbBias}%`, true), cond(`RSI < ${sbRsi}`, true), cond(`斜率連增 ≥ ${sbSlopD}棒`, true)] };
@@ -922,17 +909,15 @@ export const fetchTechnicalData = async (symbol: string, assets?: Asset[], trans
                 if (techSignal === 'PARTIAL_SELL') return { target: '', type: 'SELL', conditions: [cond(`乖離 ≥ +${sellBias}%`, true), cond(`斜率連跌 ≥ ${sellSlopD}棒`, true)] };
                 if (techSignal === 'FORCE_SELL') {
                     const forceConds = [cond(`乖離 ≥ +${sell2Bias}%`, true)];
-                    const fThresh = params.chipInstDays;
+                    const fThresh = isLarge ? params.largeCapChipInstDays : params.smallCapChipInstDays;
                     if (instData && instData.foreignConsecBuy >= fThresh && instData.trustConsecBuy >= fThresh)
                         forceConds.push(cond('⚡ 籌碼共振 可考慮布局', true));
                     else if (instData && instData.foreignConsecSell >= fThresh && instData.trustConsecSell >= fThresh)
-                        forceConds.push(cond('⚡ 法人同步棄守 強烈建議出場', true));
+                        forceConds.push(cond('⚡ 外資投信同步棄守 強烈建議出場', true));
                     return { target: '', type: 'SELL', conditions: forceConds };
                 }
             }
-            if (techSignal === 'STRONG_LAYOUT') return { target: '', type: 'BUY', conditions: [cond(`外資連買 ≥ ${chipDays}日`, true), cond(`投信連買 ≥ ${chipDays}日`, true)] };
             if (techSignal === 'WATCH_DIVERGE') return { target: '', type: 'SELL', conditions: [cond(`外資連賣 ≥ ${chipDays}日`, true), cond(foreignLabel, true), cond(marginRatioLabel, true)] };
-            if (techSignal === 'SELL') return { target: '', type: 'SELL', conditions: [cond(`外資連賣 ≥ ${chipDays}日`, true), cond(`投信連賣 ≥ ${chipDays}日`, true)] };
             if (techSignal === 'STOP_LOSS_ALERT') {
                 const unrealPnL = isHeld && heldAsset?.avgCost ? (currentPrice - heldAsset.avgCost) / heldAsset.avgCost * 100 : 0;
                 const stopPnL = isLarge ? params.largeCapStopLossPnL : params.smallCapStopLossPnL;
@@ -1009,10 +994,10 @@ export const fetchTechnicalData = async (symbol: string, assets?: Asset[], trans
             const tCS = instData.trustConsecSell;
             const fCB = instData.foreignConsecBuy;
             const tCB = instData.trustConsecBuy;
-            const chipDays   = params.chipInstDays;
-            const marginDays = params.chipMarginDays;
+            const chipDays   = instThresh;
+            const marginDays = marginDaysThresh;
             if (fCS >= chipDays && tCS >= chipDays) {
-                chipHint = { target: '🟢 法人棄守', type: 'SELL', conditions: [
+                chipHint = { target: '🟢 外資投信棄守', type: 'SELL', conditions: [
                     { label: `外資連賣 ≥ ${chipDays}日`, satisfied: true },
                     { label: `投信連賣 ≥ ${chipDays}日`, satisfied: true },
                 ]};
@@ -1201,7 +1186,7 @@ export const computeDSSForDate = (
     }
     const rsi = 100 - 100 / (1 + avgGain / (avgLoss === 0 ? 1 : avgLoss));
 
-    // 法人連買/連賣天數
+    // 外資投信連買/連賣天數
     const filteredInst = instRows.filter(r => r.date <= tradeDate);
     let foreignConsecBuy = 0, foreignConsecSell = 0, trustConsecBuy = 0, trustConsecSell = 0;
     for (let i = filteredInst.length - 1; i >= 0; i--) { if (filteredInst[i].foreign > 0) foreignConsecBuy++; else break; }
@@ -1250,18 +1235,15 @@ export const computeDSSForDate = (
         else if (canBuy && currentBias20 <= params.smallCapBuyBias       && checkSlopeImproved(params.smallCapBuySlopeDays)       && rsi < params.smallCapBuyRsi)       techSignal = 'BUY';
     }
 
-    // Track 2（籌碼面共振 / 背離）
+    // 籌碼面門檻（依類別；僅融資連增有統計支撐會覆寫燈號，外資/投信僅作 ChipHint 提示）
+    const instThresh = sizeCategory === 'ETF' ? params.etfChipInstDays : sizeCategory === 'LARGE_CAP' ? params.largeCapChipInstDays : params.smallCapChipInstDays;
+    const marginDaysThresh = sizeCategory === 'ETF' ? params.etfChipMarginDays : sizeCategory === 'LARGE_CAP' ? params.largeCapChipMarginDays : params.smallCapChipMarginDays;
+
+    // Track 2（籌碼面背離）
     if (hasInst) {
-        const instThresh = params.chipInstDays;
-        const instForeignBuy  = foreignConsecBuy  >= instThresh;
         const instForeignSell = foreignConsecSell >= instThresh;
-        const instTrustBuy    = trustConsecBuy    >= instThresh;
-        const instTrustSell   = trustConsecSell   >= instThresh;
         const isBullishSignal = ['STRONG_BUY', 'BUY'].includes(techSignal);
-        const isWeakOrNeutral = ['NONE', 'RISK_ALERT', 'PARTIAL_SELL'].includes(techSignal);
-        if      (isBullishSignal && instForeignBuy  && instTrustBuy)                                         techSignal = 'STRONG_LAYOUT';
-        else if (isBullishSignal && instForeignSell && marginConsecIncrease >= params.chipMarginDays)         techSignal = 'WATCH_DIVERGE';
-        else if (isWeakOrNeutral && instForeignSell && instTrustSell)                                        techSignal = 'SELL';
+        if (isBullishSignal && instForeignSell && marginConsecIncrease >= marginDaysThresh) techSignal = 'WATCH_DIVERGE';
     }
 
     // chipHint
@@ -1269,10 +1251,10 @@ export const computeDSSForDate = (
     if (hasInst) {
         const fCS = foreignConsecSell, tCS = trustConsecSell;
         const fCB = foreignConsecBuy,  tCB = trustConsecBuy;
-        const chipDays   = params.chipInstDays;
-        const marginDays = params.chipMarginDays;
+        const chipDays   = instThresh;
+        const marginDays = marginDaysThresh;
         if (fCS >= chipDays && tCS >= chipDays) {
-            chipHint = { target: '🟢 法人棄守', type: 'SELL', conditions: [{ label: `外資連賣 ≥ ${chipDays}日`, satisfied: true }, { label: `投信連賣 ≥ ${chipDays}日`, satisfied: true }] };
+            chipHint = { target: '🟢 外資投信棄守', type: 'SELL', conditions: [{ label: `外資連賣 ≥ ${chipDays}日`, satisfied: true }, { label: `投信連賣 ≥ ${chipDays}日`, satisfied: true }] };
         } else if (fCS >= chipDays && marginConsecIncrease >= marginDays) {
             chipHint = { target: '🟠 籌碼疑慮', type: 'SELL', conditions: [{ label: `外資連賣 ≥ ${chipDays}日`, satisfied: true }, { label: `融資連增 ≥ ${marginDays}日`, satisfied: true }] };
         } else {
@@ -1447,12 +1429,12 @@ export const buildCompletedTrades = (transactions: StockTransaction[]): Complete
 /** 買/賣動作與當天 DSS 訊號比對，判斷是否吻合。抽出為獨立函式供「實際交易回測」與「虛擬（最佳進出場）交易」共用 */
 export const computeAlignment = (side: 'BUY' | 'SELL', techSignal: TechDataResult['techSignal']): 'MATCH' | 'DIVERGE' | 'PARTIAL' => {
     if (side === 'BUY') {
-        if (['STRONG_BUY', 'BUY', 'STRONG_LAYOUT'].includes(techSignal)) return 'MATCH';
-        if (['WATCH_DIVERGE', 'SELL', 'PARTIAL_SELL', 'SECOND_PARTIAL_SELL', 'FORCE_SELL', 'STOP_LOSS_ALERT'].includes(techSignal)) return 'DIVERGE';
+        if (['STRONG_BUY', 'BUY'].includes(techSignal)) return 'MATCH';
+        if (['WATCH_DIVERGE', 'PARTIAL_SELL', 'SECOND_PARTIAL_SELL', 'FORCE_SELL', 'STOP_LOSS_ALERT'].includes(techSignal)) return 'DIVERGE';
         return 'PARTIAL';
     }
-    if (['PARTIAL_SELL', 'SECOND_PARTIAL_SELL', 'FORCE_SELL', 'STOP_LOSS_ALERT', 'SELL'].includes(techSignal)) return 'MATCH';
-    if (['STRONG_BUY', 'BUY', 'STRONG_LAYOUT'].includes(techSignal)) return 'DIVERGE';
+    if (['PARTIAL_SELL', 'SECOND_PARTIAL_SELL', 'FORCE_SELL', 'STOP_LOSS_ALERT'].includes(techSignal)) return 'MATCH';
+    if (['STRONG_BUY', 'BUY'].includes(techSignal)) return 'DIVERGE';
     return 'PARTIAL';
 };
 

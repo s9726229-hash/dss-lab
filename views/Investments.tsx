@@ -544,9 +544,7 @@ export const Investments: React.FC<InvestmentsProps> = ({
                             case 'STOP_LOSS_ALERT': return withChips(<span className={`${TECH_SIGNAL_BADGE_CLASS.STOP_LOSS_ALERT} px-2 py-1 rounded text-xs font-bold`}>⚠️ 停損警示 (&lt;={targetStopPrice})</span>);
                             case 'RISK_ALERT': return withChips(<span className={`${TECH_SIGNAL_BADGE_CLASS.PARTIAL_SELL} px-2 py-1 rounded text-xs font-bold`}>🟡 留意風險</span>);
                             case 'SECOND_PARTIAL_SELL': return withChips(<span className={`${TECH_SIGNAL_BADGE_CLASS.SECOND_PARTIAL_SELL} px-2 py-1 rounded text-xs font-bold`}>🟠 再次減碼 (&gt;={targetSellPrice})</span>);
-                            case 'STRONG_LAYOUT': return withChips(<span className={`${TECH_SIGNAL_BADGE_CLASS.STRONG_LAYOUT} px-2 py-1 rounded text-xs font-bold`}>🚀 強力布局（籌碼共振）</span>);
                             case 'WATCH_DIVERGE': return withChips(<span className={`${TECH_SIGNAL_BADGE_CLASS.WATCH_DIVERGE} px-2 py-1 rounded text-xs font-bold`}>🟠 持續觀察（籌碼背離）</span>);
-                            case 'SELL': return withChips(<span className={`${TECH_SIGNAL_BADGE_CLASS.SELL} px-2 py-1 rounded text-xs font-bold`}>🟢 建議賣出（主力棄守）</span>);
                             case 'NONE': return <span className="text-slate-500 text-xs">無訊號觀察中</span>;
                             default: return <span className="text-slate-500 text-xs">無訊號觀察中</span>;
                         }

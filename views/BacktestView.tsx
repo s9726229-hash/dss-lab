@@ -55,12 +55,8 @@ const buildTechConditions = (row: BacktestResult): { label: string; satisfied: b
             return [
                 { label: `乖離 ≥ +${sell2Bias}%`, satisfied: row.bias20 >= sell2Bias },
             ];
-        case 'STRONG_LAYOUT':
-            return '技術面偏多 + 外資/投信同步連買 → 籌碼共振升級';
         case 'WATCH_DIVERGE':
             return '技術面偏多，但外資連賣＋融資連增 → 判定籌碼背離，降級觀察';
-        case 'SELL':
-            return '技術面中性/風險預警，且外資/投信同步連賣 → 判定法人棄守';
         case 'RISK_ALERT':
             return '乖離已跌破風險預警門檻，尚未達強制停損';
         default:
@@ -74,17 +70,17 @@ interface Props {
 }
 
 const SIGNAL_LABELS: Record<string, string> = {
-    STRONG_BUY: '強力布局', BUY: '適合布局', STRONG_LAYOUT: '籌碼共振',
+    STRONG_BUY: '強力布局', BUY: '適合布局',
     NONE: '觀察中', RISK_ALERT: '風險預警',
     WATCH_DIVERGE: '籌碼疑慮', PARTIAL_SELL: '高位停利',
     SECOND_PARTIAL_SELL: '嚴重過熱', FORCE_SELL: '強制停利',
-    STOP_LOSS_ALERT: '停損預警', SELL: '法人棄守',
+    STOP_LOSS_ALERT: '停損預警',
 };
 
 const getSignalStyle = (sig: string) => TECH_SIGNAL_BADGE_CLASS[sig as keyof typeof TECH_SIGNAL_BADGE_CLASS] ?? NEUTRAL_BADGE_CLASS;
 
 const getChipStyle = (target: string) => {
-    if (target.includes('法人棄守')) return 'text-emerald-400';
+    if (target.includes('外資投信棄守')) return 'text-emerald-400';
     if (target.includes('籌碼疑慮')) return 'text-orange-400';
     if (target.includes('籌碼偏多')) return 'text-red-400';
     if (target.includes('籌碼觀察')) return 'text-sky-400';

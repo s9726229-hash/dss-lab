@@ -139,8 +139,12 @@ export const DEFAULT_TECH_PARAMS: import('../types').TechParameters = {
     smallCapPartialSellSlopeDays: 2,
 
     // 籌碼面
-    chipInstDays: 3,
-    chipMarginDays: 5
+    etfChipInstDays: 3,
+    largeCapChipInstDays: 3,
+    smallCapChipInstDays: 3,
+    etfChipMarginDays: 5,
+    largeCapChipMarginDays: 5,
+    smallCapChipMarginDays: 5
 };
 
 export const getTechParameters = (): import('../types').TechParameters => {
@@ -208,6 +212,8 @@ export interface DSSProfile {
     id: string;
     name: string;
     createdAt: number;
+    /** 反推用的交易資料最新涵蓋到哪一天（買進/賣出日期取最大值），用來判斷這份設定檔是否該重新分析 */
+    dataAsOf?: string;
     source: { total: number; matched: number };
     categories: {
         ETF?:  DSSProfileCategoryStats;
